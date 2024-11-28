@@ -11,6 +11,7 @@ const fs = require('fs');
 const path = require('path');
 const csv = require('csv-parser');
 const storage = require('node-persist');
+const rateLimit = require('express-rate-limit');
 
 // Initialize express
 const app = express();
@@ -174,8 +175,8 @@ app.get('/destination/:id/coordinates', async (req, res) => {
     if (id >= 0 && id < destinations.length) {
       const destination = destinations[id];
       const coordinates = {
-        latitude: destination.Latitude,
-        longitude: destination.Longitude,
+        latitude: destination.latitude,
+        longitude: destination.longitude,
       };
       res.json(coordinates);
     } else {
@@ -190,7 +191,7 @@ app.get('/destination/:id/coordinates', async (req, res) => {
 app.get('/countries', async (req, res) => {
   try {
     const destinations = await storage.getItem('destinations') || [];
-    const countries = [...new Set(destinations.map((dest) => dest.Country))];
+    const countries = [...new Set(destinations.map((dest) => dest.country))];
     res.json(countries);
   } catch (error) {
     res.status(500).json({ error: 'Failed to retrieve countries.' });
@@ -274,6 +275,74 @@ app.get('/list/:listName', async (req, res) => {
     res.status(500).json({ error: 'Failed to retrieve list.' });
   }
 });
+
+// Delete a list
+app.delete('/list/:listName', async (req, res) => {
+    const { listName } = req.params;
+  
+    try {
+      const existingList = await storage.getItem(`list_${listName}`);
+      if (!existingList) {
+        return res.status(404).json({ error: 'List not found.' });
+      }
+  
+      await storage.removeItem(`list_${listName}`);
+      res.status(200).json({ message: `List '${listName}' deleted successfully.` });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to delete list.' });
+    }
+});
+
+// Get all list names
+app.get('/lists', async (req, res) => {
+    try {
+      const keys = await storage.keys();
+      const listNames = keys.filter(key => key.startsWith('list_')).map(key => key.replace('list_', ''));
+      res.json(listNames);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to retrieve list names.' });
+    }
+});
+  
+// Get detailed information about a list
+app.get('/list/:listName/details', async (req, res) => {
+    const { listName } = req.params;
+  
+    try {
+      const destinationIDs = await storage.getItem(`list_${listName}`);
+      if (!destinationIDs) {
+        return res.status(404).json({ error: 'List not found.' });
+      }
+  
+      const allDestinations = await storage.getItem('destinations') || [];
+      const listDetails = destinationIDs
+        .map(id => {
+          const destination = allDestinations[id - 1];
+          return destination ? {
+            Name: destination.destination,
+            Region: destination.region,
+            Country: destination.country,
+            Coordinates: {
+              Latitude: destination.latitude,
+              Longitude: destination.longitude,
+            },
+            Currency: destination.currency,
+            Language: destination.language,
+          } : undefined;
+        })
+        .filter(Boolean);
+  
+      if (listDetails.length === 0) {
+        return res.status(404).json({ error: 'No valid destinations found in the list.' });
+      }
+  
+      res.json(listDetails);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to retrieve list details.' });
+    }
+});
+  
+  
 
 // Start the server after initializing storage
 (async () => {
