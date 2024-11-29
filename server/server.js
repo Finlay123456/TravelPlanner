@@ -2,16 +2,17 @@
 const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
-const { createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification } = require('firebase/auth');
-const { auth } = require('./firebase');
+const { createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification } = require('firebase-admin/auth');
+const { auth } = require('./firebase-admin');
 const verifyToken = require('./middlewares/auth');
 const adminAuth = require('./firebase-admin').auth;
-const { sendPasswordResetEmail } = require('firebase/auth');
+const { sendPasswordResetEmail } = require('firebase-admin/auth');
 const fs = require('fs');
 const path = require('path');
 const csv = require('csv-parser');
-const storage = require('node-persist');
+const { db } = require('./firebase-admin');
 const rateLimit = require('express-rate-limit');
+const { setDoc, collection, addDoc, getDoc, getDocs, doc, updateDoc, deleteDoc, query, where } = require('firebase-admin/firestore');
 
 // Initialize express
 const app = express();
@@ -22,92 +23,48 @@ app.use(cors());
 app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, '..', 'client')));
 
-// Directory for node-persist storage
-const dataDir = path.join(__dirname, 'data', 'storage');
-
-// Initialize node-persist storage and load CSV data if empty
 async function initializeStorage() {
-  await storage.init({
-    dir: dataDir,
-    stringify: JSON.stringify,
-    parse: JSON.parse,
-  });
-
-  try {
-    // Check if data already exists in storage
-    const existingData = await storage.getItem('destinations');
-    if (!existingData || existingData.length === 0) {
-      const destinations = [];
-
-      // Read and parse CSV file synchronously
-      await new Promise((resolve, reject) => {
-        fs.createReadStream(path.join(__dirname, 'data/csv/europe-destinations.csv'))
+    try {
+      const destinationsCollection = db.collection('destinations');  // Firestore reference
+  
+      const querySnapshot = await destinationsCollection.get();  // Query Firestore
+  
+      if (querySnapshot.empty) {
+        const destinations = [];
+        
+        // Load CSV and insert into Firestore
+        fs.createReadStream(path.join(__dirname, 'data/europe-destinations.csv'))
           .pipe(csv({ mapHeaders: ({ header }) => header.trim() }))
           .on('data', (row) => {
             destinations.push(row);
           })
           .on('end', async () => {
             try {
-              await storage.setItem('destinations', destinations);
-              console.log('CSV data loaded into storage.');
-              resolve();
+              // Add each row from CSV to Firestore
+              for (let i = 0; i < destinations.length; i++) {
+                const destination = destinations[i];
+                destination.customId = i+1;
+                await destinationsCollection.add(destination);  // Using Firestore Admin SDK's add method
+              }
+              console.log('CSV data loaded into Firestore.');
             } catch (error) {
-              reject(error);
+              console.error('Error adding destination to Firestore:', error);
             }
           })
           .on('error', (error) => {
-            reject(error);
+            console.error('Error reading CSV file:', error);
           });
-      });
-    } else {
-      console.log('Data already exists in storage.');
+      } else {
+        console.log('Data already exists in Firestore.');
+      }
+    } catch (error) {
+      console.error('Error initializing Firestore storage:', error);
     }
-  } catch (error) {
-    console.error('Error initializing storage:', error);
-  }
 }
 
 // Routes for User Management (Firebase)
-// User Signup
-app.post('/api/signup', async (req, res) => {
-    const { email, password } = req.body;
-  
-    try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
-  
-      // Send verification email
-      await sendEmailVerification(user);
-  
-      res.status(201).json({ message: 'User created successfully. Verification email sent.', user: { uid: user.uid, email: user.email } });
-    } catch (error) {
-      res.status(400).json({ error: error.message });
-    }
-});
-  
-// User Login
-app.post('/api/login', async (req, res) => {
-    const { email, password } = req.body;
-  
-    try {
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
-  
-      if (!user.emailVerified) {
-        return res.status(403).json({ error: 'Please verify your email before logging in.' });
-      }
-  
-      // Generate a custom token for the user
-      const token = await user.getIdToken();
-  
-      res.status(200).json({ message: 'Login successful', user: { uid: user.uid, email: user.email }, token });
-    } catch (error) {
-      res.status(401).json({ error: error.message });
-    }
-});
-  
 // Make Admin
-app.post('/api/make-admin', verifyToken, async (req, res) => {
+app.post('/api/admin/make-admin', verifyToken, async (req, res) => {
     const { email } = req.body;
   
     try {
@@ -118,9 +75,55 @@ app.post('/api/make-admin', verifyToken, async (req, res) => {
       res.status(400).json({ error: error.message });
     }
 });
-  
+
+// Mark a review as hidden or unhide it
+app.post('/api/admin/mark-review-hidden', verifyToken, async (req, res) => {
+    if (!req.user.admin) {
+        return res.status(403).json({ error: 'Access denied. Admins only.' });
+    }
+
+    const { reviewId, hidden } = req.body;
+
+    try {
+        const reviewRef = db.collection('reviews').doc(reviewId);
+        const reviewDoc = await reviewRef.get();
+
+        if (!reviewDoc.exists) {
+            return res.status(404).json({ error: 'Review not found.' });
+        }
+
+        // Update the "hidden" field of the review
+        await reviewRef.update({ hidden });
+
+        res.status(200).json({ message: `Review ${hidden ? 'hidden' : 'unhidden'} successfully.` });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to update review visibility.' });
+    }
+});
+
+// Ban a user (disable their account)
+app.post('/api/admin/ban-user', verifyToken, async (req, res) => {
+    if (!req.user.admin) {
+        return res.status(403).json({ error: 'Access denied. Admins only.' });
+    }
+
+    const { email } = req.body;
+
+    try {
+        // Get the user by email
+        const userRecord = await adminAuth.getUserByEmail(email);
+
+        // Disable the user's account (set disabled to true)
+        await adminAuth.updateUser(userRecord.uid, { disabled: true });
+
+        res.status(200).json({ message: `User ${email} has been banned successfully.` });
+    } catch (error) {
+        res.status(400).json({ error: 'Failed to ban user. User may not exist.' });
+    }
+});
+
 // Reset Password
-app.post('/api/reset-password', async (req, res) => {
+app.post('/api/secure/reset-password', async (req, res) => {
     const { email } = req.body;
     try {
       await sendPasswordResetEmail(auth, email);
@@ -130,174 +133,202 @@ app.post('/api/reset-password', async (req, res) => {
     }
 });
   
-// Admin Route
-app.get('/api/admin', verifyToken, async (req, res) => {
-    if (!req.user.admin) {
-      return res.status(403).json({ error: 'Access denied. Admins only.' });
-    }
-  
-    res.status(200).json({ message: 'Welcome, Admin!' });
-});
-
 // Routes for Destinations
 // Get all destinations
-app.get('/destinations', async (req, res) => {
-  try {
-    const destinations = await storage.getItem('destinations');
-    res.json(destinations || []);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to retrieve destinations.' });
-  }
-});
-
-// Get a destination by ID
-app.get('/destination/:id', async (req, res) => {
-  const id = parseInt(req.params.id, 10) - 1;
-
-  try {
-    const destinations = await storage.getItem('destinations') || [];
-    if (id >= 0 && id < destinations.length) {
-      res.json(destinations[id]);
-    } else {
-      res.status(404).json({ error: 'Destination not found.' });
+app.get('/api/open/destinations', async (req, res) => {
+    try {
+      const snapshot = await db.collection('destinations')
+                               .orderBy('customId', 'asc') // Order by customId in ascending order
+                               .get();
+      const destinations = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      res.json(destinations);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to retrieve destinations.' });
     }
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to retrieve destination.' });
-  }
 });
+
+// Get a destination by customId
+app.get('/api/open/destination/:id', async (req, res) => {
+    const { id } = req.params;
+
+    try {
+        // Convert the id to a number, since customId is stored as a number in Firestore
+        const customIdAsNumber = parseInt(id, 10);
+
+        // Query Firestore for the destination with the given customId (now a number)
+        const snapshot = await db.collection('destinations').where('customId', '==', customIdAsNumber).get();
+
+        // Check if we got a result
+        if (snapshot.empty) {
+            return res.status(404).json({ error: 'Destination not found.' });
+        }
+
+        // Since we only expect one result (customId is unique), take the first match
+        const destination = snapshot.docs[0];
+
+        // Send the response with the full document
+        res.json({ id: destination.id, ...destination.data() });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to retrieve destination.' });
+    }
+});
+
 
 // Get latitude and longitude for a destination by ID
-app.get('/destination/:id/coordinates', async (req, res) => {
-  const id = parseInt(req.params.id, 10) - 1;
-
-  try {
-    const destinations = await storage.getItem('destinations') || [];
-    if (id >= 0 && id < destinations.length) {
-      const destination = destinations[id];
-      const coordinates = {
-        latitude: destination.latitude,
-        longitude: destination.longitude,
-      };
-      res.json(coordinates);
-    } else {
-      res.status(404).json({ error: 'Destination not found.' });
+app.get('/api/open/destination/:id/coordinates', async (req, res) => {
+    const id = req.params.id;
+  
+    try {
+      const doc = await db.collection('destinations').doc(id).get();
+      if (doc.exists) {
+        const { latitude, longitude } = doc.data();
+        res.json({ latitude, longitude });
+      } else {
+        res.status(404).json({ error: 'Destination not found.' });
+      }
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to retrieve coordinates.' });
     }
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to retrieve coordinates.' });
-  }
 });
-
+  
 // Get all unique country names
-app.get('/countries', async (req, res) => {
-  try {
-    const destinations = await storage.getItem('destinations') || [];
-    const countries = [...new Set(destinations.map((dest) => dest.country))];
-    res.json(countries);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to retrieve countries.' });
-  }
+app.get('/api/open/countries', async (req, res) => {
+    try {
+      const snapshot = await db.collection('destinations')
+                               .orderBy('customId', 'asc') // Ensure data is in correct order
+                               .get();
+      const countries = [...new Set(snapshot.docs.map(doc => doc.data().Country))];
+      res.json(countries);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to retrieve countries.' });
+    }
 });
+  
 
 // Search destinations by field and pattern
-app.get('/search', async (req, res) => {
-  const { field, pattern, n } = req.query;
-  const maxResults = n ? parseInt(n, 10) : Infinity;
+app.get('/api/open/search', async (req, res) => {
+    const { field, pattern, n } = req.query;
+    const maxResults = n ? parseInt(n, 10) : Infinity;
 
-  try {
-    const destinations = await storage.getItem('destinations') || [];
+    try {
+        const snapshot = await db.collection('destinations')
+                                 .orderBy('customId', 'asc')
+                                 .get();
+        const destinations = snapshot.docs.map(doc => doc.data());
 
-    if (!destinations.length || !destinations[0].hasOwnProperty(field)) {
-      return res.status(400).json({ error: 'Invalid field name' });
+        if (!destinations.length || !Object.keys(destinations[0]).includes(field)) {
+            return res.status(400).json({ error: 'Invalid field name.' });
+        }
+
+        const matchingDestinations = destinations
+            .filter(dest => dest[field]?.toLowerCase().includes(pattern.toLowerCase()))
+            .slice(0, maxResults);
+
+        if (matchingDestinations.length > 0) {
+            res.json(matchingDestinations);
+        } else {
+            res.status(404).json({ error: 'No matching destinations found.' });
+        }
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to search destinations.' });
     }
-
-    const matchingDestinations = destinations
-      .filter((dest) => dest[field].toLowerCase().includes(pattern.toLowerCase()))
-      .slice(0, maxResults);
-
-    if (matchingDestinations.length > 0) {
-      const destinationIDs = matchingDestinations.map((dest, index) => index + 1);
-      res.json(destinationIDs);
-    } else {
-      res.status(404).json({ error: 'No matching destinations found' });
-    }
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to search destinations.' });
-  }
 });
 
 // Routes for Lists
 // Create a list
-app.post('/list', async (req, res) => {
-  const { listName } = req.body;
-
-  try {
-    const existingList = await storage.getItem(`list_${listName}`);
-    if (existingList) {
-      return res.status(409).json({ error: 'List already exists.' });
+app.post('/api/secure/list', async (req, res) => {
+    const { listName } = req.body;
+  
+    try {
+      const docRef = db.collection('lists').doc(listName);
+      const doc = await docRef.get();
+  
+      if (doc.exists) {
+        return res.status(409).json({ error: 'List already exists.' });
+      }
+  
+      await docRef.set({ destinations: [], lastModified: new Date().toISOString() });
+      res.status(201).json({ message: `List '${listName}' created successfully.` });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to create list.' });
     }
-
-    await storage.setItem(`list_${listName}`, []);
-    res.status(201).json({ message: `List '${listName}' created successfully.` });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to create list.' });
-  }
 });
+  
 
 // Update a list
-app.put('/list/:listName', async (req, res) => {
-  const { listName } = req.params;
-  const { destinations } = req.body;
-
-  try {
-    const existingList = await storage.getItem(`list_${listName}`);
-    if (!existingList) {
-      return res.status(404).json({ error: 'List does not exist.' });
+app.put('/api/secure/list/:listName', async (req, res) => {
+    const { listName } = req.params;
+    const { destinations } = req.body;
+  
+    try {
+      const docRef = db.collection('lists').doc(listName);
+      const doc = await docRef.get();
+  
+      if (!doc.exists) {
+        return res.status(404).json({ error: 'List does not exist.' });
+      }
+  
+      await docRef.update({ destinations, lastModified: new Date().toISOString() });
+      res.status(200).json({ message: `List '${listName}' updated successfully.` });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to update list.' });
     }
-
-    await storage.setItem(`list_${listName}`, destinations);
-    res.status(200).json({ message: `List '${listName}' updated successfully.` });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to update list.' });
-  }
 });
+  
 
 // Get a list
-app.get('/list/:listName', async (req, res) => {
-  const { listName } = req.params;
+app.get('/api/secure/list/:listName', async (req, res) => {
+    const { listName } = req.params;
 
-  try {
-    const list = await storage.getItem(`list_${listName}`);
-    if (!list) {
-      return res.status(404).json({ error: 'List not found.' });
+    try {
+        const docRef = db.collection('lists').doc(listName);
+        const doc = await docRef.get();
+
+        if (!doc.exists) {
+            return res.status(404).json({ error: 'List not found.' });
+        }
+
+        const listData = doc.data();
+        const destinations = await Promise.all(
+            listData.destinations.map(async customId => {
+                const destSnapshot = await db.collection('destinations')
+                                             .where('customId', '==', customId)
+                                             .get();
+                return destSnapshot.empty ? null : destSnapshot.docs[0].data();
+            })
+        );
+
+        res.json(destinations.filter(Boolean));
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to retrieve list.' });
     }
-    res.json(list);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to retrieve list.' });
-  }
 });
 
 // Delete a list
-app.delete('/list/:listName', async (req, res) => {
+app.delete('/api/secure/list/:listName', async (req, res) => {
     const { listName } = req.params;
   
     try {
-      const existingList = await storage.getItem(`list_${listName}`);
-      if (!existingList) {
+      const docRef = db.collection('lists').doc(listName);
+      const doc = await docRef.get();
+  
+      if (!doc.exists) {
         return res.status(404).json({ error: 'List not found.' });
       }
   
-      await storage.removeItem(`list_${listName}`);
+      await docRef.delete();
       res.status(200).json({ message: `List '${listName}' deleted successfully.` });
     } catch (error) {
       res.status(500).json({ error: 'Failed to delete list.' });
     }
 });
+  
 
 // Get all list names
-app.get('/lists', async (req, res) => {
+app.get('/api/secure/lists', async (req, res) => {
     try {
-      const keys = await storage.keys();
-      const listNames = keys.filter(key => key.startsWith('list_')).map(key => key.replace('list_', ''));
+      const snapshot = await db.collection('lists').get();
+      const listNames = snapshot.docs.map(doc => doc.id);
       res.json(listNames);
     } catch (error) {
       res.status(500).json({ error: 'Failed to retrieve list names.' });
@@ -305,44 +336,29 @@ app.get('/lists', async (req, res) => {
 });
   
 // Get detailed information about a list
-app.get('/list/:listName/details', async (req, res) => {
+app.get('/api/secure/list/:listName/details', async (req, res) => {
     const { listName } = req.params;
   
     try {
-      const destinationIDs = await storage.getItem(`list_${listName}`);
-      if (!destinationIDs) {
+      const doc = await db.collection('lists').doc(listName).get();
+  
+      if (!doc.exists) {
         return res.status(404).json({ error: 'List not found.' });
       }
   
-      const allDestinations = await storage.getItem('destinations') || [];
-      const listDetails = destinationIDs
-        .map(id => {
-          const destination = allDestinations[id - 1];
-          return destination ? {
-            Name: destination.destination,
-            Region: destination.region,
-            Country: destination.country,
-            Coordinates: {
-              Latitude: destination.latitude,
-              Longitude: destination.longitude,
-            },
-            Currency: destination.currency,
-            Language: destination.language,
-          } : undefined;
+      const listData = doc.data();
+      const destinations = await Promise.all(
+        listData.destinations.map(async id => {
+          const destDoc = await db.collection('destinations').doc(id).get();
+          return destDoc.exists ? destDoc.data() : null;
         })
-        .filter(Boolean);
+      );
   
-      if (listDetails.length === 0) {
-        return res.status(404).json({ error: 'No valid destinations found in the list.' });
-      }
-  
-      res.json(listDetails);
+      res.json(destinations.filter(Boolean));
     } catch (error) {
       res.status(500).json({ error: 'Failed to retrieve list details.' });
     }
-});
-  
-  
+}); 
 
 // Start the server after initializing storage
 (async () => {
