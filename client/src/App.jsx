@@ -1,30 +1,49 @@
 import React from "react";
-import { BrowserRouter as Router, Routes, Route, Link } from "react-router-dom";
-import SignupForm from "./components/SignupForm";
+import './App.css';
+import { BrowserRouter as Router, Routes, Route, useNavigate } from "react-router-dom";
+import SignUpForm from "./components/SignUpForm";
 import LoginForm from "./components/LoginForm";
-import ListManager from "./components/ListManager";
 import Destinations from "./components/Destinations";
+import Lists from "./components/Lists";
+import Profile from "./components/Profile";
+
+function HomePage() {
+    const navigate = useNavigate();
+
+    return (
+        <div className="homepage">
+            <h1>Welcome to Travel Planner!</h1>
+            <p>
+                Your one-stop platform to explore exciting destinations, create personalized lists, 
+                and plan your trips effortlessly. Sign up or log in to get started, or continue as 
+                a guest to explore public destinations.
+            </p>
+            <div className="homepage-buttons">
+                <button onClick={() => navigate("/login")} className="button">
+                    Log In
+                </button>
+                <button onClick={() => navigate("/signup")} className="button">
+                    Sign Up
+                </button>
+                <button onClick={() => navigate("/destinations")} className="button">
+                    Continue as Guest
+                </button>
+            </div>
+        </div>
+    );
+}
 
 function App() {
     return (
         <Router>
-            {/* Keep consistent page layout */}
             <div>
-                <header>
-                    <nav>
-                        <Link to="/">Home</Link> | 
-                        <Link to="/signup">Sign Up</Link> | 
-                        <Link to="/login">Log In</Link> | 
-                        <Link to="/lists">Lists</Link> | 
-                        <Link to="/destinations">Destinations</Link>
-                    </nav>
-                </header>
                 <main>
                     <Routes>
-                        <Route path="/" element={<h1>Welcome to the App!</h1>} />
-                        <Route path="/signup" element={<SignupForm />} />
+                        <Route path="/" element={<HomePage />} />
+                        <Route path="/signup" element={<SignUpForm />} />
                         <Route path="/login" element={<LoginForm />} />
-                        <Route path="/lists" element={<ListManager />} />
+                        <Route path="/profile" element={<Profile />} />
+                        <Route path="/lists" element={<Lists />} />
                         <Route path="/destinations" element={<Destinations />} />
                     </Routes>
                 </main>

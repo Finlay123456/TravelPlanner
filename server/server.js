@@ -204,25 +204,37 @@ app.get('/api/open/countries', async (req, res) => {
     }
 });
   
-
 // Search destinations by field and pattern
 app.get('/api/open/search', async (req, res) => {
-    const { field, pattern, n } = req.query;
-    const maxResults = n ? parseInt(n, 10) : Infinity;
+    const { field = "all", pattern = "", n } = req.query;
+    const maxResults = n ? parseInt(n, 10) : 209; // Default to 209 if no maxResults is provided
 
     try {
         const snapshot = await db.collection('destinations')
-                                 .orderBy('customId', 'asc')
+                                 .orderBy('customId', 'asc') // Ensure results are in order
                                  .get();
+
         const destinations = snapshot.docs.map(doc => doc.data());
 
-        if (!destinations.length || !Object.keys(destinations[0]).includes(field)) {
-            return res.status(400).json({ error: 'Invalid field name.' });
+        if (!destinations.length) {
+            return res.status(404).json({ error: 'No destinations available.' });
         }
 
         const matchingDestinations = destinations
-            .filter(dest => dest[field]?.toLowerCase().includes(pattern.toLowerCase()))
-            .slice(0, maxResults);
+            .filter(dest => {
+                // If field is "all", check all fields for matches
+                if (field === "all") {
+                    return Object.values(dest).some(value =>
+                        value?.toString().toLowerCase().startsWith(pattern.toLowerCase())
+                    );
+                }
+
+                // Otherwise, check the specific field
+                return field === "Name"
+                    ? dest["Destination"]?.toLowerCase().startsWith(pattern.toLowerCase())
+                    : dest[field]?.toLowerCase().startsWith(pattern.toLowerCase());
+            })
+            .slice(0, maxResults); // Limit the number of results
 
         if (matchingDestinations.length > 0) {
             res.json(matchingDestinations);
@@ -230,135 +242,207 @@ app.get('/api/open/search', async (req, res) => {
             res.status(404).json({ error: 'No matching destinations found.' });
         }
     } catch (error) {
+        console.error("Error during search:", error);
         res.status(500).json({ error: 'Failed to search destinations.' });
     }
 });
 
 // Routes for Lists
-// Create a list
-app.post('/api/secure/list', async (req, res) => {
-    const { listName } = req.body;
-  
+// Create a list in Firestore
+app.post('/api/secure/list', verifyToken, async (req, res) => {
+    const { listName, visibility, description } = req.body; // Include description and visibility
+    const creatorId = req.user.uid;  // Assuming the user is authenticated and `uid` is available
+
+    // Validate the input
+    if (!listName || typeof listName !== 'string') {
+        return res.status(400).json({ error: "List name is required and must be a string." });
+    }
+    if (typeof visibility !== 'boolean') {
+        return res.status(400).json({ error: "Visibility must be a boolean (true or false)." });
+    }
+    if (description && typeof description !== 'string') {
+        return res.status(400).json({ error: "Description must be a string." });
+    }
+
     try {
-      const docRef = db.collection('lists').doc(listName);
-      const doc = await docRef.get();
-  
-      if (doc.exists) {
-        return res.status(409).json({ error: 'List already exists.' });
-      }
-  
-      await docRef.set({ destinations: [], lastModified: new Date().toISOString() });
-      res.status(201).json({ message: `List '${listName}' created successfully.` });
+        const listRef = db.collection('lists').doc(listName);  // Use listName as the document ID
+        const doc = await listRef.get();
+
+        if (doc.exists) {
+            return res.status(409).json({ error: 'List already exists.' });
+        }
+
+        // Create a new list document
+        await listRef.set({
+            name: listName,
+            creatorId,
+            destinations: [],
+            visibility, // Save visibility as a boolean
+            description: description || "", // Default to an empty string if not provided
+            lastModified: new Date().toISOString(),
+        });
+
+        res.status(201).json({ message: `List '${listName}' created successfully.` });
     } catch (error) {
-      res.status(500).json({ error: 'Failed to create list.' });
+        console.error("Error creating list:", error);
+        res.status(500).json({ error: 'Failed to create list.' });
     }
 });
-  
 
-// Update a list
-app.put('/api/secure/list/:listName', async (req, res) => {
+// Update a list's destinations or metadata
+app.put('/api/secure/list/:listName', verifyToken, async (req, res) => {
     const { listName } = req.params;
-    const { destinations } = req.body;
-  
-    try {
-      const docRef = db.collection('lists').doc(listName);
-      const doc = await docRef.get();
-  
-      if (!doc.exists) {
-        return res.status(404).json({ error: 'List does not exist.' });
-      }
-  
-      await docRef.update({ destinations, lastModified: new Date().toISOString() });
-      res.status(200).json({ message: `List '${listName}' updated successfully.` });
-    } catch (error) {
-      res.status(500).json({ error: 'Failed to update list.' });
+    const { destinations, visibility, description } = req.body;
+
+    // Validate the input
+    if (typeof visibility !== 'boolean') {
+        return res.status(400).json({ error: "Visibility must be a boolean (true or false)." });
     }
-});
-  
-
-// Get a list
-app.get('/api/secure/list/:listName', async (req, res) => {
-    const { listName } = req.params;
+    if (description && typeof description !== 'string') {
+        return res.status(400).json({ error: "Description must be a string." });
+    }
 
     try {
-        const docRef = db.collection('lists').doc(listName);
-        const doc = await docRef.get();
+        const listRef = db.collection('lists').doc(listName);
+        const doc = await listRef.get();
 
         if (!doc.exists) {
             return res.status(404).json({ error: 'List not found.' });
         }
 
+        // Ensure the user has access to update the list
         const listData = doc.data();
-        const destinations = await Promise.all(
-            listData.destinations.map(async customId => {
-                const destSnapshot = await db.collection('destinations')
-                                             .where('customId', '==', customId)
-                                             .get();
-                return destSnapshot.empty ? null : destSnapshot.docs[0].data();
-            })
-        );
+        if (listData.creatorId !== req.user.uid) {
+            return res.status(403).json({ error: 'You do not have permission to edit this list.' });
+        }
 
-        res.json(destinations.filter(Boolean));
+        // Update the list
+        const updatedFields = {
+            destinations: destinations || listData.destinations, // Keep existing destinations if not provided
+            visibility, // Update visibility
+            description: description || listData.description, // Keep existing description if not provided
+            lastModified: new Date().toISOString(),
+        };
+
+        await listRef.update(updatedFields);
+
+        res.status(200).json({ message: `List '${listName}' updated successfully.` });
+    } catch (error) {
+        console.error("Error updating list:", error);
+        res.status(500).json({ error: 'Failed to update list.' });
+    }
+});
+  
+// Get a list by name
+app.get('/api/secure/list/:listName', verifyToken, async (req, res) => {
+    const { listName } = req.params;
+
+    try {
+        const doc = await db.collection('lists').doc(listName).get();
+
+        if (!doc.exists) {
+            return res.status(404).json({ error: 'List not found.' });
+        }
+
+        // Ensure the list is accessible by the requesting user
+        const listData = doc.data();
+        if (listData.visibility === 'private' && listData.creatorId !== req.user.uid) {
+            return res.status(403).json({ error: 'Access denied to private list.' });
+        }
+
+        res.json(listData);
     } catch (error) {
         res.status(500).json({ error: 'Failed to retrieve list.' });
     }
 });
 
 // Delete a list
-app.delete('/api/secure/list/:listName', async (req, res) => {
+app.delete('/api/secure/list/:listName', verifyToken, async (req, res) => {
     const { listName } = req.params;
-  
-    try {
-      const docRef = db.collection('lists').doc(listName);
-      const doc = await docRef.get();
-  
-      if (!doc.exists) {
-        return res.status(404).json({ error: 'List not found.' });
-      }
-  
-      await docRef.delete();
-      res.status(200).json({ message: `List '${listName}' deleted successfully.` });
-    } catch (error) {
-      res.status(500).json({ error: 'Failed to delete list.' });
-    }
-});
-  
 
-// Get all list names
-app.get('/api/secure/lists', async (req, res) => {
     try {
-      const snapshot = await db.collection('lists').get();
-      const listNames = snapshot.docs.map(doc => doc.id);
-      res.json(listNames);
+        const listRef = db.collection('lists').doc(listName);
+        const doc = await listRef.get();
+
+        if (!doc.exists) {
+            return res.status(404).json({ error: 'List not found.' });
+        }
+
+        // Ensure the user is the creator of the list
+        const listData = doc.data();
+        if (listData.creatorId !== req.user.uid) {
+            return res.status(403).json({ error: 'You do not have permission to delete this list.' });
+        }
+
+        await listRef.delete();
+        res.status(200).json({ message: `List '${listName}' deleted successfully.` });
     } catch (error) {
-      res.status(500).json({ error: 'Failed to retrieve list names.' });
+        res.status(500).json({ error: 'Failed to delete list.' });
+    }
+});
+
+// Get all list names and details for the authenticated user
+app.get('/api/secure/lists', verifyToken, async (req, res) => {
+    try {
+        const userId = req.user.uid; // Authenticated user's ID
+
+        // Query lists where creatorId matches the logged-in user
+        const snapshot = await db.collection('lists')
+                                 .where('creatorId', '==', userId)
+                                 .get();
+
+        if (snapshot.empty) {
+            return res.status(200).json([]); // Return an empty array if no lists are found
+        }
+
+        // Map each document to its data (including Firestore document ID)
+        const userLists = snapshot.docs.map(doc => ({
+            id: doc.id, // Firestore document ID
+            ...doc.data() // All fields in the document
+        }));
+
+        res.status(200).json(userLists); // Return the lists
+    } catch (error) {
+        console.error("Error fetching lists:", error);
+        res.status(500).json({ error: 'Failed to retrieve list names.' });
     }
 });
   
-// Get detailed information about a list
-app.get('/api/secure/list/:listName/details', async (req, res) => {
+// Get a list by name with detailed destination info
+app.get('/api/secure/list/:listName/details', verifyToken, async (req, res) => {
     const { listName } = req.params;
-  
+
     try {
-      const doc = await db.collection('lists').doc(listName).get();
-  
-      if (!doc.exists) {
-        return res.status(404).json({ error: 'List not found.' });
-      }
-  
-      const listData = doc.data();
-      const destinations = await Promise.all(
-        listData.destinations.map(async id => {
-          const destDoc = await db.collection('destinations').doc(id).get();
-          return destDoc.exists ? destDoc.data() : null;
-        })
-      );
-  
-      res.json(destinations.filter(Boolean));
+        const doc = await db.collection('lists').doc(listName).get();
+
+        if (!doc.exists) {
+            return res.status(404).json({ error: 'List not found.' });
+        }
+
+        const listData = doc.data();
+
+        // Fetch detailed destination info for each customId in the destinations array
+        const destinationsQuerySnapshot = await db.collection('destinations')
+            .where('customId', 'in', listData.destinations)
+            .get();
+
+        const destinations = destinationsQuerySnapshot.docs.map((destDoc) => ({
+            customId: destDoc.data().customId,
+            ...destDoc.data(),
+        }));
+
+        // Debugging: Log the fetched destinations
+        console.log('Fetched destinations:', destinations);
+
+        res.json({
+            ...listData,
+            destinations,
+        });
     } catch (error) {
-      res.status(500).json({ error: 'Failed to retrieve list details.' });
+        console.error('Error fetching list details:', error);
+        res.status(500).json({ error: 'Failed to fetch list details.' });
     }
-}); 
+});
 
 // Start the server after initializing storage
 (async () => {

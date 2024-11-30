@@ -1,0 +1,17 @@
+ul {
+    list-style-position: inside; /* Moves bullets closer to the text */
+    padding-left: 0; /* Removes unnecessary left padding */
+}
+
+li {
+    margin: 0; /* Removes extra space between bullet points */
+    line-height: 1.5; /* Adjusts line height for better readability */
+}
+
+.lists-container button {
+    font-size: 12px; /* Smaller font size */
+    padding: 5px 10px; /* Smaller padding */
+    border-radius: 5px; /* Optional: Rounded edges */
+    margin: 5px; /* Optional: Add space around the buttons */
+    cursor: pointer; /* Optional: Make the pointer show on hover */
+}
