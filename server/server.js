@@ -13,6 +13,8 @@ const csv = require('csv-parser');
 const { db } = require('./firebase-admin');
 const rateLimit = require('express-rate-limit');
 const { setDoc, collection, addDoc, getDoc, getDocs, doc, updateDoc, deleteDoc, query, where } = require('firebase-admin/firestore');
+const { normalizeString } = require('./utils');
+const stringSimilarity = require('string-similarity');
 
 // Initialize express
 const app = express();
@@ -206,8 +208,10 @@ app.get('/api/open/countries', async (req, res) => {
   
 // Search destinations by field and pattern
 app.get('/api/open/search', async (req, res) => {
-    const { field = "all", pattern = "", n } = req.query;
+    const { name = "", country = "", region = "", n } = req.query;
     const maxResults = n ? parseInt(n, 10) : 209; // Default to 209 if no maxResults is provided
+
+    const SIMILARITY_THRESHOLD = 0.7; // Adjust for stricter/looser matching
 
     try {
         const snapshot = await db.collection('destinations')
@@ -222,17 +226,31 @@ app.get('/api/open/search', async (req, res) => {
 
         const matchingDestinations = destinations
             .filter(dest => {
-                // If field is "all", check all fields for matches
-                if (field === "all") {
-                    return Object.values(dest).some(value =>
-                        value?.toString().toLowerCase().startsWith(pattern.toLowerCase())
-                    );
-                }
+                // Normalize fields for comparison
+                const destName = normalizeString(dest["Destination"] || "");
+                const destCountry = normalizeString(dest["Country"] || "");
+                const destRegion = normalizeString(dest["Region"] || "");
 
-                // Otherwise, check the specific field
-                return field === "Name"
-                    ? dest["Destination"]?.toLowerCase().startsWith(pattern.toLowerCase())
-                    : dest[field]?.toLowerCase().startsWith(pattern.toLowerCase());
+                // Normalize input patterns
+                const searchName = normalizeString(name);
+                const searchCountry = normalizeString(country);
+                const searchRegion = normalizeString(region);
+
+                // Fuzzy match logic
+                const matchesName = searchName
+                    ? stringSimilarity.compareTwoStrings(searchName, destName) >= SIMILARITY_THRESHOLD
+                    : true;
+
+                const matchesCountry = searchCountry
+                    ? stringSimilarity.compareTwoStrings(searchCountry, destCountry) >= SIMILARITY_THRESHOLD
+                    : true;
+
+                const matchesRegion = searchRegion
+                    ? stringSimilarity.compareTwoStrings(searchRegion, destRegion) >= SIMILARITY_THRESHOLD
+                    : true;
+
+                // Return true only if all conditions are met
+                return matchesName && matchesCountry && matchesRegion;
             })
             .slice(0, maxResults); // Limit the number of results
 
@@ -246,6 +264,7 @@ app.get('/api/open/search', async (req, res) => {
         res.status(500).json({ error: 'Failed to search destinations.' });
     }
 });
+
 
 // Routes for Lists
 // Create a list in Firestore

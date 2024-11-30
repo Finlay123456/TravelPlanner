@@ -41,9 +41,16 @@ export async function getPublicDestinations() {
     return apiRequest("/api/open/destinations");
 }
 
-export async function searchDestinations(field, pattern, maxResults = 209) {
-    const query = `field=${field || "all"}&pattern=${encodeURIComponent(pattern || "")}&n=${maxResults}`;
-    return apiRequest(`/api/open/search?${query}`);
+export async function searchDestinations({ name = "", country = "", region = "" }, maxResults = 209) {
+    // Construct the query parameters dynamically
+    const queryParams = new URLSearchParams({
+        name: encodeURIComponent(name.trim()),
+        country: encodeURIComponent(country.trim()),
+        region: encodeURIComponent(region.trim()),
+        n: maxResults.toString(),
+    });
+
+    return apiRequest(`/api/open/search?${queryParams.toString()}`);
 }
 
 export async function getSecureLists() {

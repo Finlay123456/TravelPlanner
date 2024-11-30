@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from "react";
 import './Lists.css';
-import { searchDestinations, createList, updateList, getSecureLists, getSecureListDetails } from "../api";
+import { searchDestinations, createList, updateList, getSecureLists, getSecureListDetails, deleteList } from "../api";
 
 function Lists() {
     // State variables for searching
-    const [searchTerm, setSearchTerm] = useState("");
-    const [searchType, setSearchType] = useState("");
+    const [name, setName] = useState("");
+    const [country, setCountry] = useState("");
+    const [region, setRegion] = useState("");
     const [maxResults, setMaxResults] = useState("");
     const [searchResults, setSearchResults] = useState([]);
+    const [expandedDestinations, setExpandedDestinations] = useState([]);
 
     // State variables for list creation
     const [listName, setListName] = useState("");
@@ -19,6 +21,10 @@ function Lists() {
     const [loading, setLoading] = useState(false);
     const [userLists, setUserLists] = useState([]);
     const [expandedLists, setExpandedLists] = useState([]);
+
+    // State variables for list editing
+    const [isEditing, setIsEditing] = useState(false);
+    const [editingListName, setEditingListName] = useState("");
 
     useEffect(() => {
         // Fetch the user's lists on component mount
@@ -69,23 +75,35 @@ function Lists() {
         }
     };     
 
-    const handleSearch = async () => {
-        // Ensure at least one search term or search type is provided
-        if (!searchTerm.trim() && searchType === "") {
-            alert("Please provide a search term or select a search type.");
-            return;
+    const toggleDestinationInfo = (destination) => {
+        if (expandedDestinations.some((dest) => dest.customId === destination.customId)) {
+            setExpandedDestinations(
+                expandedDestinations.filter((dest) => dest.customId !== destination.customId)
+            );
+        } else {
+            setExpandedDestinations([...expandedDestinations, destination]);
         }
-    
+    };    
+
+    const searchOnDuckDuckGo = (query) => {
+        const url = `https://duckduckgo.com/?q=${encodeURIComponent(query)}`;
+        window.open(url, "_blank");
+    };
+
+    const handleSearch = async () => {
         try {
             setLoading(true);
-    
-            // Use defaults if no maxResults or searchType is selected
+
+            // Default to empty values if no input is provided
             const results = await searchDestinations(
-                searchType || "all", // Default to "all" if no type is chosen
-                searchTerm || "",    // Default to empty string for the pattern
-                maxResults || 209    // Default to 209 if no maxResults is provided
+                { 
+                    name: name || "", 
+                    country: country || "", 
+                    region: region || "" 
+                },
+                maxResults || 209 // Default to 209 if maxResults is not specified
             );
-    
+
             setSearchResults(results);
         } catch (error) {
             console.error("Error fetching search results:", error.message);
@@ -94,7 +112,6 @@ function Lists() {
             setLoading(false);
         }
     };
-    
 
     const handleAddToSelection = (destination) => {
         if (!selectedDestinations.some((dest) => dest.customId === destination.customId)) {
@@ -106,46 +123,103 @@ function Lists() {
         setSelectedDestinations(selectedDestinations.filter((dest) => dest.customId !== customId));
     };
 
-    const handleCreateList = async () => {
+    const handleCreateOrUpdateList = async () => {
         if (!listName.trim()) {
             alert("List name cannot be empty.");
             return;
         }
-
+    
         if (selectedDestinations.length === 0) {
             alert("No destinations selected. Add destinations to your selection first.");
             return;
         }
-
+    
         try {
             setLoading(true);
-
-            // Step 1: Create an empty list
-            await createList(listName, description, visibility);
-            alert("Empty list created successfully.");
-
-            // Step 2: Populate the list with destinations
-            const destinationIds = selectedDestinations.map((dest) => dest.customId);
-            await updateList(listName, destinationIds, visibility);
-            alert("List updated successfully with destinations.");
-
+    
+            const destinationIds = selectedDestinations
+                .filter((dest) => dest && dest.customId) // Ensure valid destinations
+                .map((dest) => dest.customId);
+    
+            if (isEditing) {
+                // Update existing list
+                await updateList(editingListName, destinationIds, visibility, description);
+                alert(`List "${editingListName}" updated successfully.`);
+            } else {
+                // Create a new list
+                await createList(listName, description, visibility);
+                await updateList(listName, destinationIds, visibility);
+                alert(`List "${listName}" created successfully.`);
+            }
+    
             // Reset form
             setListName("");
             setDescription("");
             setVisibility("");
             setSelectedDestinations([]);
-
+            setIsEditing(false);
+            setEditingListName("");
+    
             // Refresh user lists
             const lists = await getSecureLists();
             setUserLists(lists);
-
         } catch (error) {
             console.error(error.message);
-            alert("Failed to create or update the list.");
+            alert(`Failed to ${isEditing ? "update" : "create"} the list.`);
+        } finally {
+            setLoading(false);
+        }
+    };    
+
+    const handleEditList = async (list) => {
+        try {
+            // Fetch detailed list data if not already available
+            const listDetails = await getSecureListDetails(list.name);
+    
+            // Populate the fields with the list data
+            setListName(listDetails.name);
+            setDescription(listDetails.description || "");
+            setVisibility(listDetails.visibility);
+            setSelectedDestinations(
+                listDetails.destinations.map((dest) => ({
+                    ...dest,
+                    customId: dest.customId || "",
+                    Destination: dest.Destination || "",
+                    Country: dest.Country || "",
+                    Region: dest.Region || "",
+                })) // Ensure all fields are properly structured
+            );
+    
+            setIsEditing(true); // Set editing mode to true
+            setEditingListName(listDetails.name); // Track the name of the list being edited
+            alert(`You are now editing the list "${listDetails.name}".`);
+        } catch (error) {
+            console.error("Error fetching list details for editing:", error.message);
+            alert("Failed to load list details for editing. Please try again.");
+        }
+    };
+    
+    
+    const handleDeleteList = async (listName) => {
+        const confirmation = window.confirm(`Are you sure you want to delete the list "${listName}"?`);
+        if (!confirmation) return;
+    
+        try {
+            setLoading(true);
+            await deleteList(listName); // Call the API to delete the list
+            alert(`List "${listName}" has been deleted.`);
+    
+            // Refresh user lists
+            const lists = await getSecureLists();
+            setUserLists(lists);
+        } catch (error) {
+            console.error("Error deleting list:", error.message);
+            alert("Failed to delete the list. Please try again.");
         } finally {
             setLoading(false);
         }
     };
+    
 
     return (
         <div className="lists-container">
@@ -153,23 +227,22 @@ function Lists() {
             <div>
                 <input
                     type="text"
-                    placeholder="Enter search term"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
+                    placeholder="Name"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
                 />
-                <select
-                    value={searchType}
-                    onChange={(e) => setSearchType(e.target.value)}
-                >
-                    {searchType === "" && (
-                        <option value="" disabled>
-                            Choose Search Type
-                        </option>
-                    )}
-                    <option value="Name">Name</option>
-                    <option value="Country">Country</option>
-                    <option value="Region">Region</option>
-                </select>
+                <input
+                    type="text"
+                    placeholder="Country"
+                    value={country}
+                    onChange={(e) => setCountry(e.target.value)}
+                />
+                <input
+                    type="text"
+                    placeholder="Region"
+                    value={region}
+                    onChange={(e) => setRegion(e.target.value)}
+                />
                 <select
                     value={maxResults}
                     onChange={(e) => setMaxResults(parseInt(e.target.value))}
@@ -179,7 +252,7 @@ function Lists() {
                             Choose Number of Results
                         </option>
                     )}
-                    {[1, 2, 5, 10, 20, 50, 100, 200].map((n) => (
+                    {[1, 2, 5, 10, 20, 50, 100, 200, 500].map((n) => (
                         <option key={n} value={n}>
                             {n}
                         </option>
@@ -197,22 +270,62 @@ function Lists() {
                         {searchResults.map((result, index) => (
                             <li key={index}>
                                 <strong>{result.Destination}</strong> - {result.Country} ({result.Region})
-                                <button onClick={() => handleAddToSelection(result)}>
+                                <button
+                                    onClick={() => handleAddToSelection(result)}
+                                    style={{ marginLeft: "10px" }}
+                                >
                                     Add to Selection
                                 </button>
+                                <button
+                                    onClick={() => toggleDestinationInfo(result)}
+                                    style={{ marginLeft: "10px" }}
+                                >
+                                    {expandedDestinations.some((dest) => dest.customId === result.customId)
+                                        ? "Hide Info"
+                                        : "View Info"}
+                                </button>
+                                <button
+                                    onClick={() => searchOnDuckDuckGo(result.Destination)}
+                                    style={{ marginLeft: "10px" }}
+                                >
+                                    Search DDG
+                                </button>
+                                {/* Expanded Destination Details */}
+                                {expandedDestinations.some(
+                                    (dest) => dest.customId === result.customId
+                                ) && (
+                                    <div style={{ marginTop: "10px", paddingLeft: "20px", border: "1px solid #ccc" }}>
+                                        <p><strong>Destination:</strong> {result.Destination}</p>
+                                        <p><strong>Country:</strong> {result.Country}</p>
+                                        <p><strong>Region:</strong> {result.Region}</p>
+                                        <p><strong>Latitude:</strong> {result.Latitude}</p>
+                                        <p><strong>Longitude:</strong> {result.Longitude}</p>
+                                        <p><strong>Description:</strong> {result.Description}</p>
+                                        <p><strong>Category:</strong> {result.Category}</p>
+                                        <p><strong>Currency:</strong> {result.Currency}</p>
+                                        <p><strong>Approximate Annual Tourists:</strong> {result["Approximate Annual Tourists"]}</p>
+                                        <p><strong>Best Time to Visit:</strong> {result["Best Time to Visit"]}</p>
+                                        <p><strong>Cultural Significance:</strong> {result["Cultural Significance"]}</p>
+                                        <p><strong>Famous Foods:</strong> {result["Famous Foods"]}</p>
+                                        <p><strong>Language:</strong> {result.Language}</p>
+                                        <p><strong>Majority Religion:</strong> {result["Majority Religion"]}</p>
+                                        <p><strong>Safety:</strong> {result.Safety}</p>
+                                        <p><strong>Cost of Living:</strong> {result["Cost of Living"]}</p>
+                                    </div>
+                                )}
                             </li>
                         ))}
                     </ul>
                 </div>
             )}
-
             <div>
-                <h3>Create a List</h3>
+                <h3>{isEditing ? "Edit List" : "Create a List"}</h3>
                 <input
                     type="text"
                     placeholder="List Name"
                     value={listName}
                     onChange={(e) => setListName(e.target.value)}
+                    disabled={isEditing} // Disable editing of the list name during update
                 />
                 <input
                     type="text"
@@ -232,9 +345,25 @@ function Lists() {
                     <option value="Public">Public</option>
                     <option value="Private">Private</option>
                 </select>
-                <button onClick={handleCreateList} disabled={loading}>
-                    {loading ? "Creating..." : "Create List"}
+                <button onClick={handleCreateOrUpdateList} disabled={loading}>
+                    {loading ? (isEditing ? "Updating..." : "Creating...") : (isEditing ? "Update List" : "Create List")}
                 </button>
+                {isEditing && (
+                    <button
+                        onClick={() => {
+                            // Cancel editing
+                            setIsEditing(false);
+                            setEditingListName("");
+                            setListName("");
+                            setDescription("");
+                            setVisibility("");
+                            setSelectedDestinations([]);
+                        }}
+                        style={{ marginLeft: "10px" }}
+                    >
+                        Cancel Edit
+                    </button>
+                )}
             </div>
 
             {selectedDestinations.length > 0 && (
@@ -260,6 +389,12 @@ function Lists() {
                             <p><strong>{list.name}</strong></p>
                             <button onClick={() => toggleListDetails(list)}>
                                 {expandedLists.some((expanded) => expanded && expanded.name === list.name) ? "Hide Info" : "View Info"}
+                            </button>
+                            <button onClick={() => handleEditList(list)} style={{ marginLeft: "10px" }}>
+                                Edit
+                            </button>
+                            <button onClick={() => handleDeleteList(list.name)} style={{ marginLeft: "10px" }}>
+                                Delete
                             </button>
                             {expandedLists.some((expanded) => expanded.name === list.name) && (
                                 <div>
