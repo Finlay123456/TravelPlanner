@@ -84,79 +84,94 @@ function ViewPublic() {
             ) : (
                 <div>
                     {publicLists.length > 0 ? (
-                        publicLists.map((list) => (
-                            <div
-                                key={list.id}
-                                style={{
-                                    border: "1px solid #ccc",
-                                    margin: "10px",
-                                    padding: "10px",
-                                }}
-                            >
-                                <h3>{list.name}</h3>
-                                <p>
-                                    <strong>Description:</strong>{" "}
-                                    {list.description || "No description provided."}
-                                </p>
-                                <p>
-                                    <strong>Created By:</strong>{" "}
-                                    {list.displayName || "Anonymous"}
-                                </p>
-                                <p>
-                                    <strong>Reviews:</strong>
-                                </p>
-                                <ul>
-                                {list.reviews
-                                    ?.filter((review) => !review.hidden).length > 0 ? ( // Check for non-hidden reviews first
-                                    list.reviews
-                                        .filter((review) => !review.hidden) // Filter out hidden reviews
-                                        .map((review, index) => (
-                                            <li key={index}>
-                                                <strong>Rating:</strong> {review.rating}/10
-                                                {review.comment && (
-                                                    <>
-                                                        {" "}
-                                                        <strong>Comment:</strong> {review.comment}
-                                                    </>
-                                                )}
-                                            </li>
-                                        ))
-                                ) : (
-                                    <li>No reviews yet.</li>
-                                )}
-
-                                </ul>
-                                {isAuthenticated && (
-                                    <div>
-                                        <h4>Add a Review</h4>
-                                        <select
-                                            value={list.rating}
-                                            onChange={(e) =>
-                                                handleInputChange(list.id, "rating", e.target.value)
-                                            }
-                                        >
-                                            <option value="">Select Rating</option>
-                                            {[...Array(10).keys()].map((num) => (
-                                                <option key={num + 1} value={num + 1}>
-                                                    {num + 1}
-                                                </option>
-                                            ))}
-                                        </select>
-                                        <input
-                                            type="text"
-                                            placeholder="Comment (optional)"
-                                            value={list.comment}
-                                            onChange={(e) =>
-                                                handleInputChange(list.id, "comment", e.target.value)
-                                            }
-                                        />
-                                        <button onClick={() => handleAddReview(list.id)}>
-                                            Submit Review
-                                        </button>
-                                    </div>
-                                )}
-                            </div>
-                        ))
+                        publicLists.map((list) => {
+                            const visibleReviews = list.reviews?.filter((review) => !review.hidden) || [];
+                            const averageRating =
+                                visibleReviews.length > 0
+                                    ? (
+                                        visibleReviews.reduce((sum, review) => sum + review.rating, 0) /
+                                        visibleReviews.length
+                                    ).toFixed(1)
+                                    : "No reviews yet";
+    
+                            return (
+                                <div
+                                    key={list.id}
+                                    style={{
+                                        border: "1px solid #ccc",
+                                        margin: "10px",
+                                        padding: "10px",
+                                    }}
+                                >
+                                    <h3>{list.name}</h3>
+                                    <p>
+                                        <strong>Description:</strong>{" "}
+                                        {list.description || "No description provided."}
+                                    </p>
+                                    <p>
+                                        <strong>Created By:</strong>{" "}
+                                        {list.displayName || "Anonymous"}
+                                    </p>
+                                    <p>
+                                        <strong>Number of Destinations:</strong>{" "}
+                                        {list.destinations?.length || 0}
+                                    </p>
+                                    <p>
+                                        <strong>Average Rating:</strong>{" "}
+                                        {averageRating}
+                                    </p>
+                                    <p>
+                                        <strong>Reviews:</strong>
+                                    </p>
+                                    <ul>
+                                        {visibleReviews.length > 0 ? (
+                                            visibleReviews.map((review, index) => (
+                                                <li key={index}>
+                                                    <strong>Rating:</strong> {review.rating}/10
+                                                    {review.comment && (
+                                                        <>
+                                                            {" "}
+                                                            <strong>Comment:</strong> {review.comment}
+                                                        </>
+                                                    )}
+                                                </li>
+                                            ))
+                                        ) : (
+                                            <li>No reviews yet.</li>
+                                        )}
+                                    </ul>
+                                    {isAuthenticated && (
+                                        <div>
+                                            <h4>Add a Review</h4>
+                                            <select
+                                                value={list.rating}
+                                                onChange={(e) =>
+                                                    handleInputChange(list.id, "rating", e.target.value)
+                                                }
+                                            >
+                                                <option value="">Select Rating</option>
+                                                {[...Array(10).keys()].map((num) => (
+                                                    <option key={num + 1} value={num + 1}>
+                                                        {num + 1}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                            <input
+                                                type="text"
+                                                placeholder="Comment (optional)"
+                                                value={list.comment}
+                                                onChange={(e) =>
+                                                    handleInputChange(list.id, "comment", e.target.value)
+                                                }
+                                            />
+                                            <button onClick={() => handleAddReview(list.id)}>
+                                                Submit Review
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })
                     ) : (
                         <p>No public lists available.</p>
                     )}
@@ -164,6 +179,6 @@ function ViewPublic() {
             )}
         </div>
     );
-}
+}    
 
 export default ViewPublic;
