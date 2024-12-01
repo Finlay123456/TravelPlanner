@@ -11,6 +11,7 @@ import ViewPublic from "./components/ViewPublic";
 import SearchPublic from './components/SearchPublic';
 import Guest from './components/Guest';
 import AdminControl from './components/AdminControl';
+import DMCA from './components/DMCA';
 
 function HomePage() {
     const navigate = useNavigate();
@@ -36,6 +37,9 @@ function HomePage() {
                 }
                     } className="button">
                     Continue as Guest
+                </button>
+                <button onClick={() => navigate("/policies")} className="button">
+                    View Policies
                 </button>
             </div>
         </div>
@@ -81,6 +85,7 @@ function App() {
                             element={<SearchPublic />} 
                         />
                         <Route path="/admincontrol" element={<AdminControl />} />
+                        <Route path="/policies" element={<DMCA />} />
                     </Routes>
                 </main>
             </div>

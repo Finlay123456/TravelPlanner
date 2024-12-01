@@ -1,0 +1,129 @@
+commit 095fcadf0a0617c7bf51cd5fab55c84479e06a4e
+Author: Finlay123456 <fcooper4@uwo.ca>
+Date:   Sun Dec 1 17:27:23 2024 -0500
+
+    Finished all required functionality
+            modified:   client/src/App.jsx
+            new file:   client/src/AuthProvider.jsx
+            modified:   client/src/api.js
+            new file:   client/src/components/AdminControl.jsx
+            new file:   client/src/components/AuthenticatedUser.jsx
+            deleted:    client/src/components/Destinations.jsx
+            new file:   client/src/components/Guest.jsx
+            new file:   client/src/components/GuestNavbar.css
+            new file:   client/src/components/GuestNavbar.jsx
+            modified:   client/src/components/Lists.jsx
+            modified:   client/src/components/LoginForm.jsx
+            new file:   client/src/components/Navbar.css
+            new file:   client/src/components/Navbar.jsx
+            modified:   client/src/components/Profile.jsx
+            new file:   client/src/components/SearchPublic.jsx
+            modified:   client/src/components/SignupForm.jsx
+            modified:   client/src/components/ViewPublic.jsx
+            modified:   client/src/main.jsx
+            modified:   server/firebase-admin.js
+            modified:   server/middlewares/auth.js
+            modified:   server/server.js
+
+commit b5bbbed7118f8be593243fe8b4a1834260813ff3
+Author: Finlay123456 <fcooper4@uwo.ca>
+Date:   Sat Nov 30 09:47:43 2024 -0500
+
+    added ability to edit and delete lists, added info dropdowns for lists and destinations, added ddg search, added input soft-matching
+            modified:   client/src/api.js
+            modified:   client/src/components/Lists.jsx
+            modified:   server/package-lock.json
+            modified:   server/package.json
+            modified:   server/server.js
+            new file:   server/utils.js
+
+commit d32b041ba8f326a1540e5f623d88f6f6774e1962
+Author: Finlay123456 <fcooper4@uwo.ca>
+Date:   Sat Nov 30 08:03:54 2024 -0500
+
+    Added main menu with navigation for users, guests and admins. Also debugging and implemented multiple more functionalities from the lab requirements
+            modified:   client/src/App.css
+            modified:   client/src/App.jsx
+            modified:   client/src/api.js
+            modified:   client/src/components/Destinations.jsx
+            deleted:    client/src/components/ListManager.jsx
+            new file:   client/src/components/Lists.css
+            new file:   client/src/components/Lists.jsx
+            modified:   client/src/components/LoginForm.jsx
+            new file:   client/src/components/Profile.jsx
+        modified:   client/src/components/SignupForm.jsx
+            modified:   client/src/main.jsx
+            modified:   server/server.js
+
+commit 3f174ff24bf14995337ad65364326f8b6ec0c47c
+Author: Finlay123456 <fcooper4@uwo.ca>
+Date:   Fri Nov 29 02:31:12 2024 -0500
+
+    Fixed firebase and firestore usage. modified entire database to use firestore instead of file based system.
+            modified:   client/.gitignore
+            modified:   client/package-lock.json
+            modified:   client/package.json
+            modified:   client/src/App.jsx
+            modified:   client/src/api.js
+            modified:   client/src/components/Destinations.jsx
+            modified:   client/src/components/LoginForm.jsx
+            new file:   client/src/firebase.js
+            modified:   server/firebase-admin.js
+            deleted:    server/firebase.js
+            modified:   server/package-lock.json
+            modified:   server/package.json
+            modified:   server/server.js
+
+commit daf8983068b881b24e7f0638d70b10a0286bca3a
+Author: Finlay123456 <fcooper4@uwo.ca>
+Date:   Thu Nov 28 16:37:26 2024 -0500
+
+    Created basic frontend to test functionalitites
+            modified:   client/package-lock.json
+            modified:   client/package.json
+            modified:   client/src/App.jsx
+            new file:   client/src/api.js
+            new file:   client/src/components/Destinations.jsx
+            new file:   client/src/components/ListManager.jsx
+            new file:   client/src/components/LoginForm.jsx
+            new file:   client/src/components/SignupForm.jsx
+            modified:   server/package-lock.json
+            modified:   server/package.json
+            modified:   server/server.js
+
+commit b05d418aebf23b8540eb9b976b04891985a1c10f
+Author: Finlay123456 <fcooper4@uwo.ca>
+Date:   Thu Nov 28 15:54:36 2024 -0500
+
+    Fixed previous commit
+            modified:   server/server.js
+
+commit 629a71e83fbf620156b0af2c99878d96d27b2120
+Author: Finlay123456 <fcooper4@uwo.ca>
+Date:   Thu Nov 28 15:49:14 2024 -0500
+
+    Updated firebase functionality to hide sensitive information and contain admin functionality. Also added all functionality from the lab 3 api
+            modified:   .gitignore
+            modified:   server/firebase-admin.js
+            modified:   server/firebase.js
+            modified:   server/package-lock.json
+            modified:   server/package.json
+            modified:   server/server.js
+
+commit ac891d9ba333b27516e12f06cb7bf6c39cca62fd
+Author: Finlay123456 <fcooper4@uwo.ca>
+Date:   Thu Nov 28 13:34:56 2024 -0500
+
+    Setup firebase authentication
+
+commit 2f149ed364601c78b759e841a877ada4ac1def7c
+Author: Finlay123456 <fcooper4@uwo.ca>
+Date:   Thu Nov 28 11:09:50 2024 -0500
+
+    Initial commit - Created Vite-React app
+
+commit ee4a23e57318e3f0731160c1bb115ffb7c54e069
+Author: github-classroom[bot] <66690702+github-classroom[bot]@users.noreply.github.com>
+Date:   Sun Nov 3 23:57:54 2024 +0000
+
+    Initial commit
