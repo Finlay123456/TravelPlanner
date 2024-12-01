@@ -1,6 +1,7 @@
 import React from "react";
-import { getAuth, sendPasswordResetEmail } from "firebase/auth";
+import { getAuth, sendPasswordResetEmail, signOut } from "firebase/auth";
 import { useNavigate } from "react-router-dom";
+import Navbar from "./Navbar";
 
 function Profile() {
     const auth = getAuth();
@@ -14,8 +15,20 @@ function Profile() {
         }
     };
 
+    const handleLogout = async () => {
+        try {
+            await signOut(auth); // Logs the user out
+            localStorage.clear();
+            navigate("/"); // Redirect to the home page (App.jsx)
+        } catch (error) {
+            console.error("Error logging out:", error);
+            alert("Failed to log out. Please try again.");
+        }
+    };
+
     return (
         <div>
+            <Navbar />
             <h2>Your Profile</h2>
             {user && (
                 <>
@@ -25,8 +38,8 @@ function Profile() {
             )}
             <div>
                 <button onClick={handleResetPassword}>Reset Password</button>
-                <button onClick={() => navigate("/lists")}>Manage Your Lists</button>
                 <button onClick={() => navigate("/public-lists")}>View Public Lists</button>
+                <button onClick={handleLogout}>Log Out</button>
             </div>
         </div>
     );

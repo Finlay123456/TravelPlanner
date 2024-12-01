@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import './Lists.css';
 import { searchDestinations, createList, updateList, getSecureLists, getSecureListDetails, deleteList } from "../api";
+import Navbar from "./Navbar";
 
 function Lists() {
     // State variables for searching
@@ -124,6 +125,10 @@ function Lists() {
     };
 
     const handleCreateOrUpdateList = async () => {
+        if (userLists.length >= 20 && !isEditing) {
+            alert("You have reached the maximum limit of 20 lists. Please delete an existing list to create a new one.");
+            return;
+        }
         if (!listName.trim()) {
             alert("List name cannot be empty.");
             return;
@@ -222,209 +227,212 @@ function Lists() {
     
 
     return (
-        <div className="lists-container">
-            <h3>Search Destinations</h3>
-            <div>
-                <input
-                    type="text"
-                    placeholder="Name"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                />
-                <input
-                    type="text"
-                    placeholder="Country"
-                    value={country}
-                    onChange={(e) => setCountry(e.target.value)}
-                />
-                <input
-                    type="text"
-                    placeholder="Region"
-                    value={region}
-                    onChange={(e) => setRegion(e.target.value)}
-                />
-                <select
-                    value={maxResults}
-                    onChange={(e) => setMaxResults(parseInt(e.target.value))}
-                >
-                    {maxResults === "" && (
-                        <option value="" disabled>
-                            Choose Number of Results
-                        </option>
-                    )}
-                    {[1, 2, 5, 10, 20, 50, 100, 200, 500].map((n) => (
-                        <option key={n} value={n}>
-                            {n}
-                        </option>
-                    ))}
-                </select>
-                <button onClick={handleSearch} disabled={loading}>
-                    {loading ? "Searching..." : "Search"}
-                </button>
-            </div>
-
-            {searchResults.length > 0 && (
+        <div>
+            <Navbar />
+            <div className="lists-container">
+                <h3>Search Destinations</h3>
                 <div>
-                    <h3>Search Results</h3>
-                    <ul>
-                        {searchResults.map((result, index) => (
-                            <li key={index}>
-                                <strong>{result.Destination}</strong> - {result.Country} ({result.Region})
-                                <button
-                                    onClick={() => handleAddToSelection(result)}
-                                    style={{ marginLeft: "10px" }}
-                                >
-                                    Add to Selection
+                    <input
+                        type="text"
+                        placeholder="Name"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                    />
+                    <input
+                        type="text"
+                        placeholder="Country"
+                        value={country}
+                        onChange={(e) => setCountry(e.target.value)}
+                    />
+                    <input
+                        type="text"
+                        placeholder="Region"
+                        value={region}
+                        onChange={(e) => setRegion(e.target.value)}
+                    />
+                    <select
+                        value={maxResults}
+                        onChange={(e) => setMaxResults(parseInt(e.target.value))}
+                    >
+                        {maxResults === "" && (
+                            <option value="" disabled>
+                                Choose Number of Results
+                            </option>
+                        )}
+                        {[1, 2, 5, 10, 20, 50, 100, 200, 500].map((n) => (
+                            <option key={n} value={n}>
+                                {n}
+                            </option>
+                        ))}
+                    </select>
+                    <button onClick={handleSearch} disabled={loading}>
+                        {loading ? "Searching..." : "Search"}
+                    </button>
+                </div>
+
+                {searchResults.length > 0 && (
+                    <div>
+                        <h3>Search Results</h3>
+                        <ul>
+                            {searchResults.map((result, index) => (
+                                <li key={index}>
+                                    <strong>{result.Destination}</strong> - {result.Country} ({result.Region})
+                                    <button
+                                        onClick={() => handleAddToSelection(result)}
+                                        style={{ marginLeft: "10px" }}
+                                    >
+                                        Add to Selection
+                                    </button>
+                                    <button
+                                        onClick={() => toggleDestinationInfo(result)}
+                                        style={{ marginLeft: "10px" }}
+                                    >
+                                        {expandedDestinations.some((dest) => dest.customId === result.customId)
+                                            ? "Hide Info"
+                                            : "View Info"}
+                                    </button>
+                                    <button
+                                        onClick={() => searchOnDuckDuckGo(result.Destination)}
+                                        style={{ marginLeft: "10px" }}
+                                    >
+                                        Search DDG
+                                    </button>
+                                    {/* Expanded Destination Details */}
+                                    {expandedDestinations.some(
+                                        (dest) => dest.customId === result.customId
+                                    ) && (
+                                        <div style={{ marginTop: "10px", paddingLeft: "20px", border: "1px solid #ccc" }}>
+                                            <p><strong>Destination:</strong> {result.Destination}</p>
+                                            <p><strong>Country:</strong> {result.Country}</p>
+                                            <p><strong>Region:</strong> {result.Region}</p>
+                                            <p><strong>Latitude:</strong> {result.Latitude}</p>
+                                            <p><strong>Longitude:</strong> {result.Longitude}</p>
+                                            <p><strong>Description:</strong> {result.Description}</p>
+                                            <p><strong>Category:</strong> {result.Category}</p>
+                                            <p><strong>Currency:</strong> {result.Currency}</p>
+                                            <p><strong>Approximate Annual Tourists:</strong> {result["Approximate Annual Tourists"]}</p>
+                                            <p><strong>Best Time to Visit:</strong> {result["Best Time to Visit"]}</p>
+                                            <p><strong>Cultural Significance:</strong> {result["Cultural Significance"]}</p>
+                                            <p><strong>Famous Foods:</strong> {result["Famous Foods"]}</p>
+                                            <p><strong>Language:</strong> {result.Language}</p>
+                                            <p><strong>Majority Religion:</strong> {result["Majority Religion"]}</p>
+                                            <p><strong>Safety:</strong> {result.Safety}</p>
+                                            <p><strong>Cost of Living:</strong> {result["Cost of Living"]}</p>
+                                        </div>
+                                    )}
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                )}
+                <div>
+                    <h3>{isEditing ? "Edit List" : "Create a List"}</h3>
+                    <input
+                        type="text"
+                        placeholder="List Name"
+                        value={listName}
+                        onChange={(e) => setListName(e.target.value)}
+                        disabled={isEditing} // Disable editing of the list name during update
+                    />
+                    <input
+                        type="text"
+                        placeholder="List Description (optional)"
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                    />
+                    <select
+                        value={visibility}
+                        onChange={(e) => setVisibility(e.target.value === "Public")}
+                    >
+                        {visibility === "" && (
+                            <option value="" disabled>
+                                Select Visibility
+                            </option>
+                        )}
+                        <option value="Public">Public</option>
+                        <option value="Private">Private</option>
+                    </select>
+                    <button onClick={handleCreateOrUpdateList} disabled={loading}>
+                        {loading ? (isEditing ? "Updating..." : "Creating...") : (isEditing ? "Update List" : "Create List")}
+                    </button>
+                    {isEditing && (
+                        <button
+                            onClick={() => {
+                                // Cancel editing
+                                setIsEditing(false);
+                                setEditingListName("");
+                                setListName("");
+                                setDescription("");
+                                setVisibility("");
+                                setSelectedDestinations([]);
+                            }}
+                            style={{ marginLeft: "10px" }}
+                        >
+                            Cancel Edit
+                        </button>
+                    )}
+                </div>
+
+                {selectedDestinations.length > 0 && (
+                    <div>
+                        <h3>Selected Destinations</h3>
+                        <ul>
+                            {selectedDestinations.map((dest, index) => (
+                                <li key={index}>
+                                    <strong>{dest.Destination}</strong> - {dest.Country} ({dest.Region})
+                                    <button onClick={() => handleRemoveFromSelection(dest.customId)}>
+                                        Remove
+                                    </button>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                )}
+                {userLists.length > 0 && (
+                    <div>
+                        <h3>Your Lists</h3>
+                        {userLists.map((list, index) => (
+                            <div key={index} style={{ marginBottom: "20px", border: "1px solid #ccc", padding: "10px" }}>
+                                <p><strong>{list.name}</strong></p>
+                                <button onClick={() => toggleListDetails(list)}>
+                                    {expandedLists.some((expanded) => expanded && expanded.name === list.name) ? "Hide Info" : "View Info"}
                                 </button>
-                                <button
-                                    onClick={() => toggleDestinationInfo(result)}
-                                    style={{ marginLeft: "10px" }}
-                                >
-                                    {expandedDestinations.some((dest) => dest.customId === result.customId)
-                                        ? "Hide Info"
-                                        : "View Info"}
+                                <button onClick={() => handleEditList(list)} style={{ marginLeft: "10px" }}>
+                                    Edit
                                 </button>
-                                <button
-                                    onClick={() => searchOnDuckDuckGo(result.Destination)}
-                                    style={{ marginLeft: "10px" }}
-                                >
-                                    Search DDG
+                                <button onClick={() => handleDeleteList(list.name)} style={{ marginLeft: "10px" }}>
+                                    Delete
                                 </button>
-                                {/* Expanded Destination Details */}
-                                {expandedDestinations.some(
-                                    (dest) => dest.customId === result.customId
-                                ) && (
-                                    <div style={{ marginTop: "10px", paddingLeft: "20px", border: "1px solid #ccc" }}>
-                                        <p><strong>Destination:</strong> {result.Destination}</p>
-                                        <p><strong>Country:</strong> {result.Country}</p>
-                                        <p><strong>Region:</strong> {result.Region}</p>
-                                        <p><strong>Latitude:</strong> {result.Latitude}</p>
-                                        <p><strong>Longitude:</strong> {result.Longitude}</p>
-                                        <p><strong>Description:</strong> {result.Description}</p>
-                                        <p><strong>Category:</strong> {result.Category}</p>
-                                        <p><strong>Currency:</strong> {result.Currency}</p>
-                                        <p><strong>Approximate Annual Tourists:</strong> {result["Approximate Annual Tourists"]}</p>
-                                        <p><strong>Best Time to Visit:</strong> {result["Best Time to Visit"]}</p>
-                                        <p><strong>Cultural Significance:</strong> {result["Cultural Significance"]}</p>
-                                        <p><strong>Famous Foods:</strong> {result["Famous Foods"]}</p>
-                                        <p><strong>Language:</strong> {result.Language}</p>
-                                        <p><strong>Majority Religion:</strong> {result["Majority Religion"]}</p>
-                                        <p><strong>Safety:</strong> {result.Safety}</p>
-                                        <p><strong>Cost of Living:</strong> {result["Cost of Living"]}</p>
+                                {expandedLists.some((expanded) => expanded.name === list.name) && (
+                                    <div>
+                                        {/* Find the expanded list details */}
+                                        {expandedLists
+                                            .filter((expanded) => expanded && expanded.name === list.name)
+                                            .map((expandedList) => (
+                                                <div key={expandedList.name}>
+                                                    <p><strong>Description:</strong> {expandedList.description || "No description provided."}</p>
+                                                    <p><strong>Visibility:</strong> {expandedList.visibility ? "Public" : "Private"}</p>
+                                                    <p><strong>Destinations:</strong></p>
+                                                    <ul>
+                                                        {expandedList.destinations.length > 0 ? (
+                                                            expandedList.destinations.map((dest, idx) => (
+                                                                <li key={idx}>
+                                                                    <strong>{dest.Destination}</strong> - {dest.Country}
+                                                                </li>
+                                                            ))
+                                                        ) : (
+                                                            <li>No destinations in this list.</li>
+                                                        )}
+                                                    </ul>
+                                                </div>
+                                            ))}
                                     </div>
                                 )}
-                            </li>
+                            </div>
                         ))}
-                    </ul>
-                </div>
-            )}
-            <div>
-                <h3>{isEditing ? "Edit List" : "Create a List"}</h3>
-                <input
-                    type="text"
-                    placeholder="List Name"
-                    value={listName}
-                    onChange={(e) => setListName(e.target.value)}
-                    disabled={isEditing} // Disable editing of the list name during update
-                />
-                <input
-                    type="text"
-                    placeholder="List Description (optional)"
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                />
-                <select
-                    value={visibility}
-                    onChange={(e) => setVisibility(e.target.value === "Public")}
-                >
-                    {visibility === "" && (
-                        <option value="" disabled>
-                            Select Visibility
-                        </option>
-                    )}
-                    <option value="Public">Public</option>
-                    <option value="Private">Private</option>
-                </select>
-                <button onClick={handleCreateOrUpdateList} disabled={loading}>
-                    {loading ? (isEditing ? "Updating..." : "Creating...") : (isEditing ? "Update List" : "Create List")}
-                </button>
-                {isEditing && (
-                    <button
-                        onClick={() => {
-                            // Cancel editing
-                            setIsEditing(false);
-                            setEditingListName("");
-                            setListName("");
-                            setDescription("");
-                            setVisibility("");
-                            setSelectedDestinations([]);
-                        }}
-                        style={{ marginLeft: "10px" }}
-                    >
-                        Cancel Edit
-                    </button>
+                    </div>
                 )}
             </div>
-
-            {selectedDestinations.length > 0 && (
-                <div>
-                    <h3>Selected Destinations</h3>
-                    <ul>
-                        {selectedDestinations.map((dest, index) => (
-                            <li key={index}>
-                                <strong>{dest.Destination}</strong> - {dest.Country} ({dest.Region})
-                                <button onClick={() => handleRemoveFromSelection(dest.customId)}>
-                                    Remove
-                                </button>
-                            </li>
-                        ))}
-                    </ul>
-                </div>
-            )}
-            {userLists.length > 0 && (
-                <div>
-                    <h3>Your Lists</h3>
-                    {userLists.map((list, index) => (
-                        <div key={index} style={{ marginBottom: "20px", border: "1px solid #ccc", padding: "10px" }}>
-                            <p><strong>{list.name}</strong></p>
-                            <button onClick={() => toggleListDetails(list)}>
-                                {expandedLists.some((expanded) => expanded && expanded.name === list.name) ? "Hide Info" : "View Info"}
-                            </button>
-                            <button onClick={() => handleEditList(list)} style={{ marginLeft: "10px" }}>
-                                Edit
-                            </button>
-                            <button onClick={() => handleDeleteList(list.name)} style={{ marginLeft: "10px" }}>
-                                Delete
-                            </button>
-                            {expandedLists.some((expanded) => expanded.name === list.name) && (
-                                <div>
-                                    {/* Find the expanded list details */}
-                                    {expandedLists
-                                        .filter((expanded) => expanded && expanded.name === list.name)
-                                        .map((expandedList) => (
-                                            <div key={expandedList.name}>
-                                                <p><strong>Description:</strong> {expandedList.description || "No description provided."}</p>
-                                                <p><strong>Visibility:</strong> {expandedList.visibility ? "Public" : "Private"}</p>
-                                                <p><strong>Destinations:</strong></p>
-                                                <ul>
-                                                    {expandedList.destinations.length > 0 ? (
-                                                        expandedList.destinations.map((dest, idx) => (
-                                                            <li key={idx}>
-                                                                <strong>{dest.Destination}</strong> - {dest.Country}
-                                                            </li>
-                                                        ))
-                                                    ) : (
-                                                        <li>No destinations in this list.</li>
-                                                    )}
-                                                </ul>
-                                            </div>
-                                        ))}
-                                </div>
-                            )}
-                        </div>
-                    ))}
-                </div>
-            )}
         </div>
     );
 }

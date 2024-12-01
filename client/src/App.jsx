@@ -1,11 +1,16 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import './App.css';
 import { BrowserRouter as Router, Routes, Route, useNavigate } from "react-router-dom";
+import { getAuth, onAuthStateChanged } from "firebase/auth";
 import SignUpForm from "./components/SignUpForm";
 import LoginForm from "./components/LoginForm";
-import Destinations from "./components/Destinations";
 import Lists from "./components/Lists";
 import Profile from "./components/Profile";
+import AuthenticatedUser from "./components/AuthenticatedUser";
+import ViewPublic from "./components/ViewPublic";
+import SearchPublic from './components/SearchPublic';
+import Guest from './components/Guest';
+import AdminControl from './components/AdminControl';
 
 function HomePage() {
     const navigate = useNavigate();
@@ -25,7 +30,11 @@ function HomePage() {
                 <button onClick={() => navigate("/signup")} className="button">
                     Sign Up
                 </button>
-                <button onClick={() => navigate("/destinations")} className="button">
+                <button onClick={() => {
+                    localStorage.clear();
+                    navigate("/guest");
+                }
+                    } className="button">
                     Continue as Guest
                 </button>
             </div>
@@ -34,6 +43,17 @@ function HomePage() {
 }
 
 function App() {
+    const [isAuthenticated, setIsAuthenticated] = useState(false);
+    const auth = getAuth();
+
+    useEffect(() => {
+        const unsubscribe = onAuthStateChanged(auth, (user) => {
+            setIsAuthenticated(!!user); // Update the authentication state based on the user
+        });
+
+        return () => unsubscribe(); // Cleanup listener on unmount
+    }, [auth]);
+
     return (
         <Router>
             <div>
@@ -42,9 +62,25 @@ function App() {
                         <Route path="/" element={<HomePage />} />
                         <Route path="/signup" element={<SignUpForm />} />
                         <Route path="/login" element={<LoginForm />} />
-                        <Route path="/profile" element={<Profile />} />
-                        <Route path="/lists" element={<Lists />} />
-                        <Route path="/destinations" element={<Destinations />} />
+                        <Route 
+                            path="/profile" 
+                            element={isAuthenticated ? <Profile /> : <HomePage />} 
+                        />
+                        <Route 
+                            path="/lists" 
+                            element={isAuthenticated ? <Lists /> : <HomePage />} 
+                        />
+                        <Route 
+                            path="/authenticated" 
+                            element={isAuthenticated ? <AuthenticatedUser /> : <HomePage />} 
+                        />
+                        <Route path="/guest" element={<Guest />} />
+                        <Route path="/viewpublic" element={<ViewPublic />}/>
+                        <Route 
+                            path="/searchpublic" 
+                            element={<SearchPublic />} 
+                        />
+                        <Route path="/admincontrol" element={<AdminControl />} />
                     </Routes>
                 </main>
             </div>

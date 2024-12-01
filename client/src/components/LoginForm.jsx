@@ -20,21 +20,37 @@ function LoginForm() {
             const userCredential = await signInWithEmailAndPassword(auth, email, password);
             const user = userCredential.user;
     
-            // Get the JWT token
-            const token = await user.getIdToken();
+            // Get the user's details from Firebase Authentication
+            const idTokenResult = await user.getIdTokenResult();
+            const claims = idTokenResult.claims;
     
-            // Store the token
+            // Check if the user is disabled
+            if (claims.disabled) {
+                // Show a user-friendly message
+                alert("Your account has been disabled. Please contact the site administrator for assistance.");
+                await auth.signOut(); // Immediately sign out the user
+                return;
+            }
+    
+            // Store the JWT token
+            const token = idTokenResult.token;
             localStorage.setItem("authToken", token);
     
-            alert("Login successful!");
-            navigate("/profile");
+            navigate("/authenticated");
         } catch (error) {
+            // Handle Firebase Authentication errors
             console.error("Error logging in:", error.message);
-            alert("Login failed. Please check your email and password.");
+            if (error.code === "auth/user-disabled") {
+                alert("Your account has been disabled. Please contact the site administrator.");
+            } else {
+                alert("Login failed. Please check your email and password.");
+            }
         } finally {
             setLoading(false);
         }
-    };    
+    };
+    
+      
 
     return (
         <div>
@@ -63,6 +79,9 @@ function LoginForm() {
                 </div>
                 <button type="submit" disabled={loading}>
                     {loading ? "Logging In..." : "Login"}
+                </button>
+                <button onClick={() => navigate("/")} className="back-button">
+                    Back
                 </button>
             </form>
         </div>

@@ -8,10 +8,18 @@ const verifyToken = async (req, res, next) => {
   }
 
   try {
+    // Verify the token
     const decodedToken = await getAuth().verifyIdToken(token);
-    req.user = decodedToken; // Attach user info to the request
+
+    // Attach user info and custom claims to the request
+    req.user = {
+      uid: decodedToken.uid,
+      isAdmin: decodedToken.isAdmin || false, // Check if the user is an admin
+    };
+
     next();
   } catch (error) {
+    console.error("Error verifying token:", error); // Log the error for debugging
     res.status(401).json({ error: 'Unauthorized. Invalid token.' });
   }
 };

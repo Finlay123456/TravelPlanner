@@ -15,6 +15,9 @@ const rateLimit = require('express-rate-limit');
 const { setDoc, collection, addDoc, getDoc, getDocs, doc, updateDoc, deleteDoc, query, where } = require('firebase-admin/firestore');
 const { normalizeString } = require('./utils');
 const stringSimilarity = require('string-similarity');
+const { admin, assignAdminRole, checkIfAdmin } = require('./firebase-admin');
+const { getAuth } = require('firebase-admin/auth');
+
 
 // Initialize express
 const app = express();
@@ -24,6 +27,8 @@ const port = 3000;
 app.use(cors());
 app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, '..', 'client')));
+
+    assignAdminRole('qQOOXdmvE4arEYkmuQN6TGiInyw1');
 
 async function initializeStorage() {
     try {
@@ -71,41 +76,123 @@ app.post('/api/admin/make-admin', verifyToken, async (req, res) => {
   
     try {
       const user = await adminAuth.getUserByEmail(email);
-      await adminAuth.setCustomUserClaims(user.uid, { admin: true });
+      await adminAuth.setCustomUserClaims(user.uid, { isAdmin: true });
+      console.log(user);
       res.status(200).json({ message: `${email} is now an admin.` });
     } catch (error) {
       res.status(400).json({ error: error.message });
     }
 });
 
-// Mark a review as hidden or unhide it
-app.post('/api/admin/mark-review-hidden', verifyToken, async (req, res) => {
-    if (!req.user.admin) {
-        return res.status(403).json({ error: 'Access denied. Admins only.' });
-    }
-
-    const { reviewId, hidden } = req.body;
-
+app.post('/api/admin/remove-admin', verifyToken, async (req, res) => {
+    const { email } = req.body;
+  
     try {
-        const reviewRef = db.collection('reviews').doc(reviewId);
-        const reviewDoc = await reviewRef.get();
-
-        if (!reviewDoc.exists) {
-            return res.status(404).json({ error: 'Review not found.' });
-        }
-
-        // Update the "hidden" field of the review
-        await reviewRef.update({ hidden });
-
-        res.status(200).json({ message: `Review ${hidden ? 'hidden' : 'unhidden'} successfully.` });
+      const user = await adminAuth.getUserByEmail(email);
+      await adminAuth.setCustomUserClaims(user.uid, { isAdmin: false });
+      console.log(user);
+      res.status(200).json({ message: `${email} is no longer an admin.` });
     } catch (error) {
-        res.status(500).json({ error: 'Failed to update review visibility.' });
+      res.status(400).json({ error: error.message });
     }
 });
 
+app.get('/api/check-admin', async (req, res) => {
+    const idToken = req.headers.authorization?.split("Bearer ")[1]; // Extract token from Authorization header
+    if (!idToken) {
+        return res.status(401).json({ error: "Unauthorized: No token provided" });
+    }
+
+    try {
+        const isAdmin = await checkIfAdmin(idToken);
+        res.json({ isAdmin });
+    } catch (error) {
+        console.error("Error checking admin status:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+});
+
+// Fetch all reviews from lists
+app.get('/api/admin/reviews', verifyToken, async (req, res) => {
+    if (!req.user.isAdmin) {
+        return res.status(403).json({ error: 'Access denied. Admins only.' });
+    }
+
+    try {
+        const listsSnapshot = await db.collection('lists').get();
+        const reviews = [];
+
+        for (const listDoc of listsSnapshot.docs) {
+            const listData = listDoc.data();
+            const listName = listData.name || "Unknown List";
+
+            // Ensure reviews exist and are an array
+            if (Array.isArray(listData.reviews)) {
+                for (let i = 0; i < listData.reviews.length; i++){
+                    const review = listData.reviews[i];
+                    reviews.push({
+                        listId: listDoc.id,
+                        listName: listName,
+                        reviewIndex: i,
+                        rating: review.rating || 0,
+                        comment: review.comment || "No comment provided.",
+                        hidden: review.hidden || false,
+                    });
+                }
+            }
+        }
+
+        res.status(200).json(reviews);
+    } catch (error) {
+        console.error("Error fetching reviews:", error);
+        res.status(500).json({ error: 'Failed to fetch reviews.' });
+    }
+});
+
+// Toggle the hidden status of a review within a list
+app.post('/api/admin/toggle-review-hidden', verifyToken, async (req, res) => {
+    if (!req.user.isAdmin) {
+        return res.status(403).json({ error: 'Access denied. Admins only.' });
+    }
+
+    const { listId, reviewIndex, hidden } = req.body;
+
+    if (listId == null || reviewIndex == null || hidden == null) {
+        return res.status(400).json({ error: 'Missing required fields: listId, reviewIndex, or hidden.' });
+    }
+
+    try {
+        const listRef = db.collection('lists').doc(listId);
+        const listDoc = await listRef.get();
+
+        if (!listDoc.exists) {
+            return res.status(404).json({ error: 'List not found.' });
+        }
+
+        const reviews = listDoc.data().reviews || [];
+
+        // Ensure the review index is valid
+        if (reviewIndex < 0 || reviewIndex >= reviews.length) {
+            return res.status(404).json({ error: 'Review not found at the specified index.' });
+        }
+
+        // Update the hidden status of the specific review
+        reviews[reviewIndex].hidden = hidden;
+
+        // Update the list document with the modified reviews array
+        await listRef.update({ reviews });
+
+        res.status(200).json({ message: `Review at index ${reviewIndex} in list '${listId}' has been ${hidden ? 'hidden' : 'unhidden'}.` });
+    } catch (error) {
+        console.error('Error toggling review visibility:', error);
+        res.status(500).json({ error: 'Failed to toggle review visibility.' });
+    }
+});
+
+
 // Ban a user (disable their account)
 app.post('/api/admin/ban-user', verifyToken, async (req, res) => {
-    if (!req.user.admin) {
+    if (!req.user.isAdmin) {
         return res.status(403).json({ error: 'Access denied. Admins only.' });
     }
 
@@ -121,6 +208,52 @@ app.post('/api/admin/ban-user', verifyToken, async (req, res) => {
         res.status(200).json({ message: `User ${email} has been banned successfully.` });
     } catch (error) {
         res.status(400).json({ error: 'Failed to ban user. User may not exist.' });
+    }
+});
+
+// Unban a user (enable their account)
+app.post('/api/admin/unban-user', verifyToken, async (req, res) => {
+    if (!req.user.isAdmin) {
+        return res.status(403).json({ error: 'Access denied. Admins only.' });
+    }
+
+    const { email } = req.body;
+
+    try {
+        // Get the user by email
+        const userRecord = await adminAuth.getUserByEmail(email);
+
+        // Enable the user's account (set disabled to false)
+        await adminAuth.updateUser(userRecord.uid, { disabled: false });
+
+        res.status(200).json({ message: `User ${email} has been unbanned successfully.` });
+    } catch (error) {
+        console.error("Error unbanning user:", error);
+        res.status(400).json({ error: 'Failed to unban user. User may not exist.' });
+    }
+});
+
+
+// Fetch all users from Firebase Authentication
+app.get("/api/admin/users", verifyToken, async (req, res) => {
+    if (!req.user.isAdmin) {
+        return res.status(403).json({ error: "Access denied. Admins only." });
+    }
+
+    try {
+        const listUsersResult = await adminAuth.listUsers();
+        const users = listUsersResult.users.map((user) => ({
+            uid: user.uid,
+            email: user.email,
+            displayName: user.displayName || "Anonymous",
+            disabled: user.disabled || false,
+            admin: user.customClaims?.admin || false, // Check if the user is an admin
+        }));
+
+        res.status(200).json(users);
+    } catch (error) {
+        console.error("Error fetching users:", error);
+        res.status(500).json({ error: "Failed to fetch users." });
     }
 });
 
@@ -269,8 +402,8 @@ app.get('/api/open/search', async (req, res) => {
 // Routes for Lists
 // Create a list in Firestore
 app.post('/api/secure/list', verifyToken, async (req, res) => {
-    const { listName, visibility, description } = req.body; // Include description and visibility
-    const creatorId = req.user.uid;  // Assuming the user is authenticated and `uid` is available
+    const { listName, visibility, description } = req.body; // Removed `createdBy` from request body
+    const creatorId = req.user.uid; // Extracted from the verified token
 
     // Validate the input
     if (!listName || typeof listName !== 'string') {
@@ -282,19 +415,26 @@ app.post('/api/secure/list', verifyToken, async (req, res) => {
     if (description && typeof description !== 'string') {
         return res.status(400).json({ error: "Description must be a string." });
     }
-
     try {
-        const listRef = db.collection('lists').doc(listName);  // Use listName as the document ID
+        // Fetch the user’s display name from Firebase Auth
+        const userRecord = await getAuth().getUser(creatorId);
+        const displayName = userRecord.displayName;
+
+        // Ensure the `displayName` field exists and is a valid string
+        if (!displayName || typeof displayName !== 'string') {
+            return res.status(400).json({ error: "User does not have a valid display name." });
+        }
+        const listRef = db.collection('lists').doc(listName); // Use listName as the document ID
         const doc = await listRef.get();
 
         if (doc.exists) {
             return res.status(409).json({ error: 'List already exists.' });
         }
-
         // Create a new list document
         await listRef.set({
             name: listName,
-            creatorId,
+            displayName, // Set the creator's display name
+            creatorId, // Set the creator's UID
             destinations: [],
             visibility, // Save visibility as a boolean
             description: description || "", // Default to an empty string if not provided
@@ -462,6 +602,85 @@ app.get('/api/secure/list/:listName/details', verifyToken, async (req, res) => {
         res.status(500).json({ error: 'Failed to fetch list details.' });
     }
 });
+
+// Endpoint for guests to fetch the 10 most recent public lists
+app.get("/api/open/public-lists", async (req, res) => {
+    try {
+        const snapshot = await db.collection("lists")
+            .where("visibility", "==", true)
+            .orderBy("lastModified", "desc")
+            .limit(10) // Restrict to 10 most recent public lists
+            .get();
+
+        const publicLists = snapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+        }));
+
+        res.json(publicLists);
+    } catch (error) {
+        console.error("Error fetching public lists for guests:", error);
+        res.status(500).json({ error: "Failed to fetch public lists." });
+    }
+});
+
+// Endpoint for authenticated users to fetch all public lists
+app.get("/api/secure/public-lists", async (req, res) => {
+    try {
+        const snapshot = await db.collection("lists")
+            .where("visibility", "==", true)
+            .orderBy("lastModified", "desc")
+            .get();
+
+        const publicLists = snapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+        }));
+
+        res.json(publicLists); // Return all public lists
+    } catch (error) {
+        console.error("Error fetching public lists for authenticated users:", error);
+        res.status(500).json({ error: "Failed to fetch public lists." });
+    }
+});
+
+// Endpoint for authenticated users to add a review to a list
+app.post("/api/secure/lists/:id/review", async (req, res) => {
+    const { id } = req.params;
+    const { rating, comment } = req.body;
+
+    if (!rating || rating < 1 || rating > 10) {
+        return res.status(400).json({ error: "Rating must be a number between 1 and 10." });
+    }
+
+    try {
+        const listRef = db.collection("lists").doc(id);
+
+        // Fetch the current list data
+        const listDoc = await listRef.get();
+        if (!listDoc.exists) {
+            return res.status(404).json({ error: "List not found." });
+        }
+
+        const newReview = {
+            rating,
+            comment: comment || "", // Default to an empty string if no comment provided
+            hidden: false, // Default hidden flag
+        };
+
+        // Add the review to the list's reviews array
+        await listRef.update({
+            reviews: admin.firestore.FieldValue.arrayUnion(newReview),
+        });
+
+        res.json({ message: "Review added successfully." });
+    } catch (error) {
+        console.error("Error adding review:", error);
+        res.status(500).json({ error: "Failed to add review." });
+    }
+});
+
+
 
 // Start the server after initializing storage
 (async () => {

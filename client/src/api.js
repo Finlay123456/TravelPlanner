@@ -69,7 +69,6 @@ export async function getPublicListDetails(listId) {
  * Secure (Authenticated) Endpoints
  */
 export async function createList(name, description, visibility) {
-
     return apiRequest(
         "/api/secure/list",
         {
@@ -77,12 +76,13 @@ export async function createList(name, description, visibility) {
             body: JSON.stringify({
                 listName: name,
                 visibility, // Pass boolean
-                description,
+                description, // Pass optional description
             }),
         },
         true // Requires authentication
     );
 }
+
 
 export async function updateList(name, destinations, visibility, description) {
     return apiRequest(
@@ -109,9 +109,17 @@ export async function deleteList(listName) {
     );
 }
 
-export async function addReview(listName, rating, comment = "") {
+export async function getGuestPublicLists() {
+    return apiRequest("/api/open/public-lists");
+}
+
+export async function getAuthenticatedPublicLists() {
+    return apiRequest("/api/secure/public-lists", {}, true);
+}
+
+export async function submitReview(listId, rating, comment = "") {
     return apiRequest(
-        `/api/secure/list/${listName}/review`,
+        `/api/secure/lists/${listId}/review`,
         {
             method: "POST",
             body: JSON.stringify({ rating, comment }),
@@ -120,37 +128,72 @@ export async function addReview(listName, rating, comment = "") {
     );
 }
 
+
 /**
  * Admin Endpoints
  */
-export async function grantAdminPrivileges(userId) {
+export async function grantAdminPrivileges(email) {
     return apiRequest(
-        `/api/admin/user/${userId}/grant`,
+        `/api/admin/make-admin`,
         {
-            method: "PUT",
+            method: "POST",
+            body: JSON.stringify({ email }), // Pass email in the body
         },
         true // Admin-level endpoint
     );
 }
 
-export async function toggleReviewVisibility(reviewId, hidden) {
+export async function revokeAdminPrivileges(email) {
     return apiRequest(
-        `/api/admin/review/${reviewId}`,
+        `/api/admin/remove-admin`,
         {
-            method: "PUT",
-            body: JSON.stringify({ hidden }),
+            method: "POST",
+            body: JSON.stringify({ email }), // Pass email in the body
         },
         true // Admin-level endpoint
     );
 }
 
-export async function toggleUserDisabled(userId, disabled) {
+export async function toggleReviewVisibility(listId, reviewIndex, hidden) {
     return apiRequest(
-        `/api/admin/user/${userId}/disable`,
+        `/api/admin/toggle-review-hidden`,
         {
-            method: "PUT",
-            body: JSON.stringify({ disabled }),
+            method: "POST",
+            body: JSON.stringify({ listId, reviewIndex, hidden }),
+        },
+        true // Requires admin-level authentication
+    );
+}
+
+
+export async function banUser(email) {
+    return apiRequest(
+        `/api/admin/ban-user`,
+        {
+            method: "POST",
+            body: JSON.stringify({ email }), // Pass email in the body
         },
         true // Admin-level endpoint
     );
 }
+
+export async function unbanUser(email) {
+    return apiRequest(
+        `/api/admin/unban-user`,
+        {
+            method: "POST",
+            body: JSON.stringify({ email }), // Pass email in the body
+        },
+        true // Admin-level endpoint
+    );
+}
+
+// Fetch all users
+export async function fetchAllUsers() {
+    return apiRequest("/api/admin/users", {}, true); // Admin-level endpoint
+}
+
+export async function fetchAllReviews() {
+    return apiRequest('/api/admin/reviews', {}, true); // Requires admin authentication
+}
+

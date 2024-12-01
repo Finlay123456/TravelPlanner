@@ -1,0 +1,51 @@
+.navbar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%; /* Full width of the page */
+    background-color: #333; /* Default background color */
+    color: white;
+    display: flex; /* Flex layout for equal distribution */
+    justify-content: space-between; /* Ensure sections are evenly distributed */
+    align-items: center;
+    height: 60px; /* Adjust as needed */
+    z-index: 1000;
+    box-shadow: 0px 2px 5px rgba(0, 0, 0, 0.3);
+}
+
+.navbar a {
+    flex: 1; /* Each link takes up 1/4th of the navbar */
+    text-align: center; /* Center the text */
+    text-decoration: none;
+    color: white;
+    padding: 20px 0; /* Adjust padding for height */
+    transition: background-color 0.3s;
+}
+
+.navbar a.active {
+    background-color: #007bff; /* Highlight color for active tab */
+}
+
+.navbar a:hover {
+    background-color: #555; /* Optional hover effect */
+}
+
+.navbar button {
+    flex: 1;
+    text-align: center;
+    border: none;
+    background: none;
+    color: white;
+    padding: 20px 0;
+    font-size: 16px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+.navbar button:hover {
+    background-color: #555;
+}
+
+.navbar button.active {
+    background-color: #007bff;
+}
