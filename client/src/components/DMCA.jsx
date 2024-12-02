@@ -47,6 +47,25 @@ const Policies = () => {
           </li>
         </ul>
       </section>
+      {/* Acceptable Use Policy Section */}
+      <section>
+        <h2>Acceptable Use Policy (AUP)</h2>
+        <p>
+          Our Acceptable Use Policy (AUP) is publicly accessible to all users.
+        </p>
+        <ul>
+          <li>
+            <a
+              href="/acceptable-use-policy"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: "blue", textDecoration: "underline" }}
+            >
+              View Acceptable Use Policy
+            </a>
+          </li>
+        </ul>
+      </section>
     </div>
   );
 };
