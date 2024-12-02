@@ -17,7 +17,7 @@ function GuestNavbar() {
                 to="/viewpublic" 
                 className={({ isActive }) => isActive ? "active" : ""}
             >
-                View Public Lists
+                View Some Public Lists
             </NavLink>
             <NavLink 
                 to="/searchpublic" 
