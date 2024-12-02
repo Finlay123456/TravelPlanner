@@ -9,12 +9,12 @@ const verifyToken = async (req, res, next) => {
 
   try {
     // Verify the token
-    const decodedTokn = await getAuth().verifyIdToken(token);
+    const decodedToken = await getAuth().verifyIdToken(token);
 
     // Attach user info and custom claims to the request
     req.user = {
-      uid: decodedTokn.uid,
-      isAdmin: decodedTokn.isAdmin || false, // Check if the user is an admin
+      uid: decodedToken.uid,
+      isAdmin: decodedToken.isAdmin || false, // Check if the user is an admin
     };
 
     next();
