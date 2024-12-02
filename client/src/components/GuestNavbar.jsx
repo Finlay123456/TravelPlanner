@@ -11,7 +11,7 @@ function GuestNavbar() {
                 to="/guest" 
                 className={({ isActive }) => isActive ? "active" : ""}
             >
-                Home
+                Home Page
             </NavLink>
             <NavLink 
                 to="/viewpublic" 
