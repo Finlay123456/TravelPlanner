@@ -1,10 +1,24 @@
-# SE 3316 - Lab 3/4
-Please put all front-end files in the folder named `client` and all back-end files in the folder named `server`.
+# Travel Planner App 🌍
 
-For lab 3, edit `client/index.html` file to add necessary HTML and add links to your CSS files. Add your front-end JavaScript code to `client/lab3.js` Put all your CSS and any other JavaScript files in the `client` folder. Put all your front-end assets in `client/img` folder and back-end assets in `server/data` folder. Git will ignore content in these folders and you must copy them separately to the server when you are deploying.
+A full-stack web application for planning and managing travel itineraries, featuring a responsive user interface and real-time collaboration.
 
-For lab 4, create front-end framework inside `client` folder.
+## Features ✨
+- **User Authentication:** Secure login and registration powered by Firebase Authentication.  
+- **Trip Management:** Create, edit, and delete travel plans with real-time updates.  
+- **Collaborative Planning:** Share itineraries and collaborate with others in real-time.  
+- **Scalable Backend:** RESTful API integrated with Firestore for seamless data storage and retrieval.  
+- **Responsive Design:** Optimized for both desktop and mobile devices.
 
-Edit `server/server.js` file to add JavaScript code that implements your REST API.
+## Technologies Used 🛠️
+- **Frontend:** Vite, React, CSS  
+- **Backend:** Node.js, Express, RESTful API  
+- **Database:** Firestore (NoSQL)  
+- **Authentication:** Firebase Authentication  
+- **Hosting:** AWS EC2  
+- **Version Control:** GitHub  
 
-If you use any AI tools, please record the prompts in the file `ai-prompts.txt`. Commit history of this file must match the code changes in your repository.
+## About 📜
+This project was developed as part of my coursework in web technologies. All code is my original work, designed and implemented to demonstrate full-stack development skills and modern web practices.
+
+## License 📄
+This project is licensed under the [MIT License](./LICENSE).
